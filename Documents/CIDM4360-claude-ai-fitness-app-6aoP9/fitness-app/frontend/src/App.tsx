@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Sparkles, Utensils, Dumbbell,
-  TrendingUp, BarChart2, Scan, User, Zap, Timer, Watch,
+  TrendingUp, BarChart2, Scan, User, Zap, Timer, Watch, Shield, LogOut,
 } from 'lucide-react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
 import DailyPlan from './components/DailyPlan';
 import MealLogger from './components/MealLogger';
@@ -14,11 +16,10 @@ import UserProfilePage from './components/UserProfile';
 import QuickFood from './components/QuickFood';
 import TimedWorkout from './components/TimedWorkout';
 import WearableDashboard from './components/WearableDashboard';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import { getUser } from './api/client';
 import type { UserProfile } from './types';
 
-const STORAGE_KEY = 'fitness_user_id';
-
-// Split nav into two rows for 11 tabs
 const NAV_TABS_ROW1 = [
   { id: 'home', label: 'Home', icon: LayoutDashboard },
   { id: 'plan', label: 'Plan', icon: Sparkles },
@@ -36,39 +37,36 @@ const NAV_TABS_ROW2 = [
   { id: 'profile', label: 'Profile', icon: User },
 ];
 
-export default function App() {
+// ─── Inner app (rendered after authentication) ────────────────────────────────
+function AuthenticatedApp() {
+  const { userId, hasProfile, setHasProfile, logout, email } = useAuth();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState('home');
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    const storedId = localStorage.getItem(STORAGE_KEY);
-    if (storedId) {
-      fetch(`/api/users/${storedId}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(u => {
-          if (u) setUser(u);
-          else setShowOnboarding(true);
-        })
-        .catch(() => setShowOnboarding(true))
-        .finally(() => setLoading(false));
-    } else {
+    if (!hasProfile || !userId) {
       setShowOnboarding(true);
       setLoading(false);
+      return;
     }
-  }, []);
+    getUser(userId)
+      .then(u => { setUser(u); setShowOnboarding(false); })
+      .catch(() => { setShowOnboarding(true); })
+      .finally(() => setLoading(false));
+  }, [userId, hasProfile]);
 
   const handleUserSaved = (u: UserProfile) => {
-    localStorage.setItem(STORAGE_KEY, String(u.id));
     setUser(u);
+    setHasProfile(u.id);
     setShowOnboarding(false);
     setActiveTab('home');
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center">
           <div className="w-12 h-12 border-3 border-primary-500/30 border-t-primary-500 rounded-full spin mx-auto mb-4" />
           <p className="text-gray-400">Loading AI Fitness Coach…</p>
@@ -80,12 +78,16 @@ export default function App() {
   if (showOnboarding || !user) {
     return (
       <div className="min-h-screen bg-gray-950">
-        {/* App Header */}
-        <div className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800 px-4 py-3 flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary-500 rounded-xl flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
+        <div className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-primary-500 rounded-xl flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-black text-white text-lg">AI Fitness Coach</span>
           </div>
-          <span className="font-black text-white text-lg">AI Fitness Coach</span>
+          <button onClick={logout} className="text-gray-500 hover:text-gray-300 text-xs flex items-center gap-1">
+            <LogOut className="w-3.5 h-3.5" /> Sign out
+          </button>
         </div>
         <UserProfilePage onSave={handleUserSaved} />
       </div>
@@ -94,21 +96,37 @@ export default function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'home': return <Dashboard user={user} onNavigate={setActiveTab} />;
-      case 'plan': return <DailyPlan user={user} />;
-      case 'meals': return <MealLogger user={user} />;
-      case 'workout': return <WorkoutTracker user={user} />;
-      case 'progress': return <ProgressAnalysis user={user} />;
-      case 'report': return <WeeklyReport user={user} />;
-      case 'body': return <BodyAnalysis user={user} />;
+      case 'home':      return <Dashboard user={user} onNavigate={setActiveTab} />;
+      case 'plan':      return <DailyPlan user={user} />;
+      case 'meals':     return <MealLogger user={user} />;
+      case 'workout':   return <WorkoutTracker user={user} />;
+      case 'progress':  return <ProgressAnalysis user={user} />;
+      case 'report':    return <WeeklyReport user={user} />;
+      case 'body':      return <BodyAnalysis user={user} />;
       case 'quickfood': return <QuickFood user={user} />;
-      case 'timed': return <TimedWorkout user={user} />;
-      case 'health': return <WearableDashboard user={user} />;
-      case 'profile': return (
-        <UserProfilePage
-          existing={user}
-          onSave={handleUserSaved}
-        />
+      case 'timed':     return <TimedWorkout user={user} />;
+      case 'health':    return <WearableDashboard user={user} />;
+      case 'privacy':   return <PrivacyPolicy />;
+      case 'profile':   return (
+        <div className="space-y-0">
+          <UserProfilePage existing={user} onSave={handleUserSaved} />
+          {/* Account actions */}
+          <div className="px-4 pb-8 space-y-3 max-w-2xl mx-auto">
+            <button
+              onClick={() => setActiveTab('privacy')}
+              className="w-full py-3 bg-gray-900 rounded-2xl text-gray-400 text-sm flex items-center justify-center gap-2 hover:text-white transition-colors"
+            >
+              <Shield className="w-4 h-4" /> Privacy Policy
+            </button>
+            <button
+              onClick={logout}
+              className="w-full py-3 bg-gray-900 rounded-2xl text-red-400 text-sm flex items-center justify-center gap-2 hover:bg-red-500/10 transition-colors"
+            >
+              <LogOut className="w-4 h-4" /> Sign Out
+            </button>
+            {email && <p className="text-center text-xs text-gray-600">{email}</p>}
+          </div>
+        </div>
       );
       default: return <Dashboard user={user} onNavigate={setActiveTab} />;
     }
@@ -122,19 +140,20 @@ export default function App() {
           <div className="w-8 h-8 bg-primary-500 rounded-xl flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <span className="font-black text-white text-base">AI Fitness Coach</span>
-          </div>
+          <span className="font-black text-white text-base">AI Fitness Coach</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400 capitalize hidden sm:block">
             Goal: {user.goal.replace('_', ' ')}
           </span>
-          <div className="w-8 h-8 bg-primary-500/20 rounded-full flex items-center justify-center">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className="w-8 h-8 bg-primary-500/20 rounded-full flex items-center justify-center hover:bg-primary-500/30 transition-colors"
+          >
             <span className="text-primary-400 text-xs font-bold">
               {user.name.charAt(0).toUpperCase()}
             </span>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -189,5 +208,39 @@ export default function App() {
         </div>
       </nav>
     </div>
+  );
+}
+
+// ─── Root app wrapper ─────────────────────────────────────────────────────────
+function AppInner() {
+  const { isAuthenticated } = useAuth();
+  const [authedUserId, setAuthedUserId] = useState<number | null>(null);
+  const [authedHasProfile, setAuthedHasProfile] = useState(false);
+  const { userId, hasProfile } = useAuth();
+
+  useEffect(() => {
+    setAuthedUserId(userId);
+    setAuthedHasProfile(hasProfile);
+  }, [userId, hasProfile]);
+
+  if (!isAuthenticated) {
+    return (
+      <AuthScreen
+        onAuthenticated={(uid, hp) => {
+          setAuthedUserId(uid);
+          setAuthedHasProfile(hp);
+        }}
+      />
+    );
+  }
+
+  return <AuthenticatedApp />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   );
 }

@@ -5,8 +5,11 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +20,10 @@ from models import (
     BodyAnalysis,
     DailyCheckin,
     DailyPlan,
+    DevicePushToken,
     MealLog,
     StepLog,
+    UserAuth,
     UserProfile,
     WearableData,
     WeeklyReport,
@@ -27,11 +32,63 @@ from models import (
 
 load_dotenv()
 
-app = FastAPI(title="AI Fitness Coach API", version="1.0.0")
+# ─── Security / JWT ───────────────────────────────────────────────────────────
+
+JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-to-a-long-random-secret-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_DAYS = 30
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+
+def _create_token(user_auth_id: int, email: str, user_profile_id: Optional[int]) -> str:
+    expire = datetime.utcnow() + timedelta(days=JWT_EXPIRE_DAYS)
+    return jwt.encode(
+        {"sub": str(user_auth_id), "email": email, "user_id": user_profile_id, "exp": expire},
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM,
+    )
+
+
+async def get_current_auth(
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> UserAuth:
+    """Dependency that validates JWT and returns the UserAuth record."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        auth_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    result = await db.execute(select(UserAuth).where(UserAuth.id == auth_id))
+    auth = result.scalar_one_or_none()
+    if not auth:
+        raise HTTPException(status_code=401, detail="User not found")
+    return auth
+
+
+app = FastAPI(title="AI Fitness Coach API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost",          # Capacitor Android
+        "capacitor://localhost",     # Capacitor iOS
+        "ionic://localhost",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -91,14 +148,103 @@ class StepLogCreate(BaseModel):
     steps: int
 
 
+# ─── Auth Routes ──────────────────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/register")
+async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    # Check duplicate email
+    existing = await db.execute(select(UserAuth).where(UserAuth.email == data.email.lower()))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    auth = UserAuth(email=data.email.lower(), hashed_password=_hash_password(data.password))
+    db.add(auth)
+    await db.commit()
+    await db.refresh(auth)
+    token = _create_token(auth.id, auth.email, None)
+    return {"access_token": token, "token_type": "bearer", "user_id": None, "has_profile": False}
+
+
+@app.post("/api/auth/login")
+async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserAuth).where(UserAuth.email == data.email.lower()))
+    auth = result.scalar_one_or_none()
+    if not auth or not _verify_password(data.password, auth.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = _create_token(auth.id, auth.email, auth.user_profile_id)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user_id": auth.user_profile_id,
+        "has_profile": auth.user_profile_id is not None,
+    }
+
+
+@app.get("/api/auth/me")
+async def auth_me(auth: UserAuth = Depends(get_current_auth)):
+    return {"email": auth.email, "user_id": auth.user_profile_id, "has_profile": auth.user_profile_id is not None}
+
+
+# ─── Push Token ───────────────────────────────────────────────────────────────
+
+class PushTokenRequest(BaseModel):
+    user_id: int
+    token: str
+    platform: str  # ios, android, web
+
+
+@app.post("/api/push-token")
+async def save_push_token(data: PushTokenRequest, db: AsyncSession = Depends(get_db)):
+    # Upsert: one token per user per platform
+    result = await db.execute(
+        select(DevicePushToken).where(
+            and_(DevicePushToken.user_id == data.user_id, DevicePushToken.platform == data.platform)
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        existing.token = data.token
+    else:
+        db.add(DevicePushToken(user_id=data.user_id, token=data.token, platform=data.platform))
+    await db.commit()
+    return {"message": "Push token saved"}
+
+
 # ─── User Routes ──────────────────────────────────────────────────────────────
 
 @app.post("/api/users")
-async def create_user(data: UserProfileCreate, db: AsyncSession = Depends(get_db)):
+async def create_user(
+    data: UserProfileCreate,
+    db: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+):
     user = UserProfile(**data.model_dump())
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    # Link profile to auth account if JWT provided
+    if credentials:
+        try:
+            payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            auth_id = int(payload["sub"])
+            auth_result = await db.execute(select(UserAuth).where(UserAuth.id == auth_id))
+            auth = auth_result.scalar_one_or_none()
+            if auth:
+                auth.user_profile_id = user.id
+                await db.commit()
+        except (JWTError, KeyError, ValueError):
+            pass
     return {"id": user.id, "name": user.name, "message": "Profile created!"}
 
 

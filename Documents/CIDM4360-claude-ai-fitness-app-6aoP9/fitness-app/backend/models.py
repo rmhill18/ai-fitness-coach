@@ -153,3 +153,24 @@ class DailyCheckin(Base):
     notes = Column(Text, default="")
     streak_days = Column(Integer, default=1)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class UserAuth(Base):
+    __tablename__ = "user_auth"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    user_profile_id = Column(Integer, nullable=True)  # linked after profile setup
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class DevicePushToken(Base):
+    __tablename__ = "device_push_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    token = Column(String(500), nullable=False)
+    platform = Column(String(20))  # ios, android, web
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

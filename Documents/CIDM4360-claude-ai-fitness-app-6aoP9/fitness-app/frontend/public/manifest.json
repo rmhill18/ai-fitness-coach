@@ -1,4 +1,5 @@
 {
+  "id": "com.aifitnesscoach.app",
   "name": "AI Fitness Coach",
   "short_name": "FitCoach",
   "description": "Your AI-powered personal fitness and nutrition coach",
@@ -22,7 +23,6 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [],
   "shortcuts": [
     {
       "name": "Log Meal",
