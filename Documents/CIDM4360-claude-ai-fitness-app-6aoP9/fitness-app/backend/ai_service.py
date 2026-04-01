@@ -390,6 +390,204 @@ Note: All estimates are visual approximations. Always recommend professional med
     return _parse_json_response(text)
 
 
+def get_quick_food_decision(
+    user: dict,
+    restaurant: str,
+    meal_context: str,
+    calories_remaining: int,
+) -> dict:
+    """Give an instant food ordering recommendation for a restaurant."""
+    prompt = f"""You are a nutrition coach helping someone make the best food choice RIGHT NOW.
+
+USER GOAL: {user.get('goal', 'maintenance')}
+DIETARY RESTRICTIONS: {user.get('dietary_restrictions', 'none')}
+RESTAURANT / FOOD SPOT: {restaurant}
+CONTEXT: {meal_context}
+CALORIES REMAINING TODAY: {calories_remaining} kcal
+
+Give a quick, no-nonsense recommendation. Be practical and realistic — they're standing in line.
+
+Return ONLY valid JSON:
+{{
+  "recommendation": "<exact item(s) to order, specific>",
+  "why": "<1-2 sentence explanation of why this fits their goals>",
+  "estimated_calories": <integer>,
+  "estimated_protein_g": <integer>,
+  "smart_swaps": ["<specific modification to make healthier, e.g. 'ask for no sauce'>", ...],
+  "avoid": ["<item to skip and why, 1 line>", ...],
+  "backup_option": "<second best choice if main unavailable>",
+  "quick_tip": "<one practical in-the-moment tip>"
+}}"""
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = next(b.text for b in response.content if b.type == "text")
+    return _parse_json_response(text)
+
+
+def generate_timed_workout(
+    user: dict,
+    available_minutes: int,
+    equipment: str,
+    focus_area: Optional[str] = None,
+) -> dict:
+    """Generate a workout that fits a specific time window."""
+    prompt = f"""You are a personal trainer creating a workout that fits a strict time limit.
+
+USER: {user.get('name')}, Goal: {user.get('goal')}, Level: {user.get('fitness_level', 'intermediate')}
+AVAILABLE TIME: {available_minutes} minutes TOTAL (including warmup and cooldown)
+EQUIPMENT: {equipment}
+FOCUS AREA: {focus_area or 'full body'}
+
+Create an efficient, high-quality workout that fits EXACTLY in {available_minutes} minutes.
+Every minute counts — no fluff. Make it feel achievable and complete.
+
+Return ONLY valid JSON:
+{{
+  "workout_name": "<creative name for this session>",
+  "total_minutes": {available_minutes},
+  "format": "<circuit|HIIT|straight sets|AMRAP|superset>",
+  "calories_estimate": <integer>,
+  "difficulty": "<easy|moderate|hard>",
+  "warmup": {{
+    "duration_minutes": <int>,
+    "exercises": ["<exercise>", "<exercise>", "<exercise>"]
+  }},
+  "main_workout": {{
+    "duration_minutes": <int>,
+    "structure": "<brief description of how rounds/sets work>",
+    "exercises": [
+      {{
+        "name": "<exercise>",
+        "duration_or_reps": "<e.g. 40 sec or 12 reps>",
+        "rest": "<e.g. 20 sec>",
+        "modification": "<easier option for beginners>"
+      }}
+    ]
+  }},
+  "cooldown": {{
+    "duration_minutes": <int>,
+    "exercises": ["<stretch>", "<stretch>"]
+  }},
+  "pro_tip": "<advice to maximize this short session>",
+  "motivation": "<short energizing message>"
+}}"""
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = next(b.text for b in response.content if b.type == "text")
+    return _parse_json_response(text)
+
+
+def get_recomposition_guidance(user: dict) -> dict:
+    """Generate body recomposition (lose fat + gain muscle simultaneously) guidance."""
+    prompt = f"""You are a sports scientist specializing in body recomposition.
+
+USER PROFILE:
+- Age: {user.get('age')}, Height: {user.get('height_cm')}cm, Weight: {user.get('weight_kg')}kg
+- Activity Level: {user.get('activity_level')}
+- Fitness Level: {user.get('fitness_level')}
+- Dietary Restrictions: {user.get('dietary_restrictions', 'none')}
+
+Create a science-based body recomposition strategy to lose fat and gain muscle simultaneously.
+
+Return ONLY valid JSON:
+{{
+  "overview": "<2-3 sentence explanation of their recomp potential and approach>",
+  "calorie_strategy": {{
+    "daily_calories": <integer>,
+    "rationale": "<why this specific intake level>",
+    "cycling": "<simple calorie cycling tip if applicable>"
+  }},
+  "macro_split": {{
+    "protein_g": <integer>,
+    "carbs_g": <integer>,
+    "fat_g": <integer>,
+    "protein_priority_reason": "<why protein is set at this level>"
+  }},
+  "training_approach": {{
+    "weekly_sessions": <integer>,
+    "strength_days": <integer>,
+    "cardio_days": <integer>,
+    "style": "<e.g. progressive overload with moderate rep ranges>",
+    "key_principles": ["<principle>", "<principle>", "<principle>"]
+  }},
+  "timeline": {{
+    "monthly_fat_loss_kg": <float>,
+    "monthly_muscle_gain_kg": <float>,
+    "milestones": ["<week 4 milestone>", "<week 8 milestone>", "<week 12 milestone>"]
+  }},
+  "top_tips": ["<evidence-based tip>", "<tip>", "<tip>"],
+  "common_mistakes": ["<mistake to avoid>", "<mistake>", "<mistake>"],
+  "progress_markers": ["<non-scale way to track recomp>", "<marker>", "<marker>"]
+}}"""
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=3000,
+        thinking={"type": "adaptive"},
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = next(b.text for b in response.content if b.type == "text")
+    return _parse_json_response(text)
+
+
+def get_budget_meal_plan(user: dict, weekly_budget_usd: float) -> dict:
+    """Generate a budget-friendly weekly meal plan."""
+    prompt = f"""You are a nutrition coach specializing in affordable healthy eating.
+
+USER PROFILE:
+- Goal: {user.get('goal')}
+- Activity Level: {user.get('activity_level')}
+- Dietary Restrictions: {user.get('dietary_restrictions', 'none')}
+WEEKLY FOOD BUDGET: ${weekly_budget_usd:.0f} USD
+
+Create a practical, budget-friendly weekly meal plan that supports their fitness goals.
+Focus on affordable protein sources, whole foods, and minimal food waste.
+All prices should be realistic US grocery store estimates.
+
+Return ONLY valid JSON:
+{{
+  "weekly_cost_estimate": <float>,
+  "cost_per_day": <float>,
+  "overview": "<brief strategy for eating well on this budget>",
+  "staple_foods": [
+    {{"food": "<food>", "weekly_cost_usd": <float>, "uses": ["<how to use it>"]}}
+  ],
+  "daily_template": {{
+    "breakfast": {{"meal": "<name>", "cost_usd": <float>, "calories": <int>, "protein_g": <int>, "prep_minutes": <int>}},
+    "lunch": {{"meal": "<name>", "cost_usd": <float>, "calories": <int>, "protein_g": <int>, "prep_minutes": <int>}},
+    "dinner": {{"meal": "<name>", "cost_usd": <float>, "calories": <int>, "protein_g": <int>, "prep_minutes": <int>}},
+    "snack": {{"meal": "<name>", "cost_usd": <float>, "calories": <int>, "protein_g": <int>, "prep_minutes": <int>}}
+  }},
+  "shopping_list": [
+    {{"item": "<grocery item>", "quantity": "<amount>", "estimated_cost_usd": <float>}}
+  ],
+  "meal_prep_tips": ["<time and money saving tip>", "<tip>"],
+  "budget_protein_sources": ["<affordable high-protein food>", "<source>", "<source>"],
+  "total_daily_nutrition": {{
+    "calories": <int>,
+    "protein_g": <int>,
+    "carbs_g": <int>,
+    "fat_g": <int>
+  }}
+}}"""
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=3000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = next(b.text for b in response.content if b.type == "text")
+    return _parse_json_response(text)
+
+
 def generate_adaptive_workout(
     user: dict,
     missed_workouts: int,

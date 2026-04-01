@@ -8,6 +8,12 @@ import type {
   ProgressAnalysis,
   WeeklyReport,
   BodyAnalysisResult,
+  WearableData,
+  DailyCheckin,
+  QuickFoodResult,
+  TimedWorkoutResult,
+  RecompositionGuidance,
+  BudgetMealPlan,
 } from '../types';
 
 const api = axios.create({ baseURL: '/api' });
@@ -114,3 +120,43 @@ export const analyzeBody = (userId: number, file: File) => {
 
 export const getBodyHistory = (userId: number) =>
   api.get(`/body/history/${userId}`).then(r => r.data);
+
+// Wearable / Health Data
+export const logWearableData = (data: WearableData & { user_id: number }) =>
+  api.post('/wearable', data).then(r => r.data);
+
+export const getWearableData = (userId: number, days?: number) =>
+  api.get<WearableData[]>(`/wearable/${userId}`, { params: { days } }).then(r => r.data);
+
+// Daily Check-in
+export const dailyCheckin = (data: DailyCheckin & { user_id: number }) =>
+  api.post('/checkin', data).then(r => r.data);
+
+export const getCheckins = (userId: number, days?: number) =>
+  api.get<DailyCheckin[]>(`/checkin/${userId}`, { params: { days } }).then(r => r.data);
+
+// Quick Food Decision
+export const getQuickFoodDecision = (data: {
+  user_id: number;
+  restaurant: string;
+  meal_context?: string;
+  calories_remaining?: number;
+}) => api.post<QuickFoodResult>('/food/quick-decision', data).then(r => r.data);
+
+// Timed Workout Generator
+export const generateTimedWorkout = (data: {
+  user_id: number;
+  available_minutes: number;
+  equipment?: string;
+  focus_area?: string;
+}) => api.post<TimedWorkoutResult>('/workouts/timed', data).then(r => r.data);
+
+// Body Recomposition Guidance
+export const getRecompositionGuidance = (userId: number) =>
+  api.get<RecompositionGuidance>(`/recomposition/${userId}`).then(r => r.data);
+
+// Budget Meal Plan
+export const getBudgetMealPlan = (userId: number, weeklyBudget?: number) =>
+  api
+    .get<BudgetMealPlan>(`/budget-plan/${userId}`, { params: { weekly_budget: weeklyBudget } })
+    .then(r => r.data);

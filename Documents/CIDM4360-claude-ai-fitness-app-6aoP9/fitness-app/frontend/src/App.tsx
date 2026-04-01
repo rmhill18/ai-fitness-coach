@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Sparkles, Utensils, Dumbbell,
-  TrendingUp, BarChart2, Scan, User
+  TrendingUp, BarChart2, Scan, User, Zap, Timer, Watch,
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import DailyPlan from './components/DailyPlan';
@@ -11,18 +11,28 @@ import ProgressAnalysis from './components/ProgressAnalysis';
 import WeeklyReport from './components/WeeklyReport';
 import BodyAnalysis from './components/BodyAnalysis';
 import UserProfilePage from './components/UserProfile';
+import QuickFood from './components/QuickFood';
+import TimedWorkout from './components/TimedWorkout';
+import WearableDashboard from './components/WearableDashboard';
 import type { UserProfile } from './types';
 
 const STORAGE_KEY = 'fitness_user_id';
 
-const NAV_TABS = [
+// Split nav into two rows for 11 tabs
+const NAV_TABS_ROW1 = [
   { id: 'home', label: 'Home', icon: LayoutDashboard },
   { id: 'plan', label: 'Plan', icon: Sparkles },
   { id: 'meals', label: 'Meals', icon: Utensils },
   { id: 'workout', label: 'Train', icon: Dumbbell },
   { id: 'progress', label: 'Progress', icon: TrendingUp },
   { id: 'report', label: 'Report', icon: BarChart2 },
+];
+
+const NAV_TABS_ROW2 = [
   { id: 'body', label: 'Body', icon: Scan },
+  { id: 'quickfood', label: 'Quick Food', icon: Zap },
+  { id: 'timed', label: 'Quick Train', icon: Timer },
+  { id: 'health', label: 'Health', icon: Watch },
   { id: 'profile', label: 'Profile', icon: User },
 ];
 
@@ -91,6 +101,9 @@ export default function App() {
       case 'progress': return <ProgressAnalysis user={user} />;
       case 'report': return <WeeklyReport user={user} />;
       case 'body': return <BodyAnalysis user={user} />;
+      case 'quickfood': return <QuickFood user={user} />;
+      case 'timed': return <TimedWorkout user={user} />;
+      case 'health': return <WearableDashboard user={user} />;
       case 'profile': return (
         <UserProfilePage
           existing={user}
@@ -126,30 +139,53 @@ export default function App() {
       </div>
 
       {/* Page Content */}
-      <main className="flex-1 overflow-y-auto pb-24">
+      <main className="flex-1 overflow-y-auto pb-32">
         {renderContent()}
       </main>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation — two rows */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-950/95 backdrop-blur-sm border-t border-gray-800 z-10">
-        <div className="max-w-2xl mx-auto grid grid-cols-8">
-          {NAV_TABS.map(tab => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center py-2.5 gap-0.5 transition-colors ${
-                  active ? 'text-primary-400' : 'text-gray-500 hover:text-gray-400'
-                }`}
-              >
-                <Icon className={`w-5 h-5 ${active ? 'drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]' : ''}`} />
-                <span className="text-[10px] font-medium">{tab.label}</span>
-                {active && <div className="w-1 h-1 bg-primary-400 rounded-full" />}
-              </button>
-            );
-          })}
+        <div className="max-w-2xl mx-auto">
+          {/* Row 1 */}
+          <div className="grid grid-cols-6 border-b border-gray-800/50">
+            {NAV_TABS_ROW1.map(tab => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex flex-col items-center py-2 gap-0.5 transition-colors ${
+                    active ? 'text-primary-400' : 'text-gray-500 hover:text-gray-400'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${active ? 'drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]' : ''}`} />
+                  <span className="text-[9px] font-medium">{tab.label}</span>
+                  {active && <div className="w-1 h-1 bg-primary-400 rounded-full" />}
+                </button>
+              );
+            })}
+          </div>
+          {/* Row 2 */}
+          <div className="grid grid-cols-5">
+            {NAV_TABS_ROW2.map(tab => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex flex-col items-center py-2 gap-0.5 transition-colors ${
+                    active ? 'text-primary-400' : 'text-gray-500 hover:text-gray-400'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${active ? 'drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]' : ''}`} />
+                  <span className="text-[9px] font-medium">{tab.label}</span>
+                  {active && <div className="w-1 h-1 bg-primary-400 rounded-full" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
     </div>

@@ -15,10 +15,12 @@ import ai_service
 from database import get_db, init_db
 from models import (
     BodyAnalysis,
+    DailyCheckin,
     DailyPlan,
     MealLog,
     StepLog,
     UserProfile,
+    WearableData,
     WeeklyReport,
     WorkoutLog,
 )
@@ -609,6 +611,258 @@ async def get_body_history(user_id: int, db: AsyncSession = Depends(get_db)):
     ]
 
 
+# ─── Wearable / Health Data ───────────────────────────────────────────────────
+
+class WearableDataCreate(BaseModel):
+    user_id: int
+    log_date: str
+    sleep_score: Optional[int] = None
+    sleep_hours: Optional[float] = None
+    hrv_ms: Optional[float] = None
+    resting_heart_rate: Optional[int] = None
+    recovery_score: Optional[int] = None
+    spo2_pct: Optional[float] = None
+    steps: Optional[int] = None
+    active_calories: Optional[int] = None
+    device_type: str = "manual"
+
+
+@app.post("/api/wearable")
+async def log_wearable(data: WearableDataCreate, db: AsyncSession = Depends(get_db)):
+    # Upsert by user + date
+    result = await db.execute(
+        select(WearableData).where(
+            and_(
+                WearableData.user_id == data.user_id,
+                WearableData.log_date == date.fromisoformat(data.log_date),
+            )
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        for k, v in data.model_dump(exclude={"user_id", "log_date"}).items():
+            if v is not None:
+                setattr(existing, k, v)
+    else:
+        db.add(WearableData(
+            user_id=data.user_id,
+            log_date=date.fromisoformat(data.log_date),
+            **{k: v for k, v in data.model_dump(exclude={"user_id", "log_date"}).items() if v is not None},
+        ))
+    await db.commit()
+    return {"message": "Wearable data saved"}
+
+
+@app.get("/api/wearable/{user_id}")
+async def get_wearable(user_id: int, days: int = 7, db: AsyncSession = Depends(get_db)):
+    since = date.today() - timedelta(days=days)
+    result = await db.execute(
+        select(WearableData).where(
+            and_(WearableData.user_id == user_id, WearableData.log_date >= since)
+        ).order_by(WearableData.log_date.desc())
+    )
+    records = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "log_date": str(r.log_date),
+            "sleep_score": r.sleep_score,
+            "sleep_hours": r.sleep_hours,
+            "hrv_ms": r.hrv_ms,
+            "resting_heart_rate": r.resting_heart_rate,
+            "recovery_score": r.recovery_score,
+            "spo2_pct": r.spo2_pct,
+            "steps": r.steps,
+            "active_calories": r.active_calories,
+            "device_type": r.device_type,
+        }
+        for r in records
+    ]
+
+
+# ─── Daily Check-in ───────────────────────────────────────────────────────────
+
+class DailyCheckinCreate(BaseModel):
+    user_id: int
+    checkin_date: str
+    mood: int           # 1-5
+    energy_level: int   # 1-5
+    sleep_quality: int  # 1-5
+    stress_level: int   # 1-5
+    muscle_soreness: int  # 1-5
+    notes: str = ""
+
+
+@app.post("/api/checkin")
+async def daily_checkin(data: DailyCheckinCreate, db: AsyncSession = Depends(get_db)):
+    checkin_date = date.fromisoformat(data.checkin_date)
+
+    # Check if already checked in today
+    result = await db.execute(
+        select(DailyCheckin).where(
+            and_(
+                DailyCheckin.user_id == data.user_id,
+                DailyCheckin.checkin_date == checkin_date,
+            )
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    # Calculate streak
+    yesterday = checkin_date - timedelta(days=1)
+    streak_result = await db.execute(
+        select(DailyCheckin).where(
+            and_(
+                DailyCheckin.user_id == data.user_id,
+                DailyCheckin.checkin_date == yesterday,
+            )
+        )
+    )
+    yesterday_checkin = streak_result.scalar_one_or_none()
+    streak = (yesterday_checkin.streak_days + 1) if yesterday_checkin else 1
+
+    if existing:
+        existing.mood = data.mood
+        existing.energy_level = data.energy_level
+        existing.sleep_quality = data.sleep_quality
+        existing.stress_level = data.stress_level
+        existing.muscle_soreness = data.muscle_soreness
+        existing.notes = data.notes
+        existing.streak_days = streak
+        await db.commit()
+        return {"message": "Check-in updated", "streak_days": streak}
+    else:
+        checkin = DailyCheckin(
+            user_id=data.user_id,
+            checkin_date=checkin_date,
+            mood=data.mood,
+            energy_level=data.energy_level,
+            sleep_quality=data.sleep_quality,
+            stress_level=data.stress_level,
+            muscle_soreness=data.muscle_soreness,
+            notes=data.notes,
+            streak_days=streak,
+        )
+        db.add(checkin)
+        await db.commit()
+        await db.refresh(checkin)
+        return {"message": "Check-in saved", "streak_days": streak}
+
+
+@app.get("/api/checkin/{user_id}")
+async def get_checkins(user_id: int, days: int = 30, db: AsyncSession = Depends(get_db)):
+    since = date.today() - timedelta(days=days)
+    result = await db.execute(
+        select(DailyCheckin).where(
+            and_(DailyCheckin.user_id == user_id, DailyCheckin.checkin_date >= since)
+        ).order_by(DailyCheckin.checkin_date.desc())
+    )
+    checkins = result.scalars().all()
+    return [
+        {
+            "id": c.id,
+            "checkin_date": str(c.checkin_date),
+            "mood": c.mood,
+            "energy_level": c.energy_level,
+            "sleep_quality": c.sleep_quality,
+            "stress_level": c.stress_level,
+            "muscle_soreness": c.muscle_soreness,
+            "notes": c.notes,
+            "streak_days": c.streak_days,
+        }
+        for c in checkins
+    ]
+
+
+# ─── Quick Food Decision ──────────────────────────────────────────────────────
+
+class QuickFoodRequest(BaseModel):
+    user_id: int
+    restaurant: str
+    meal_context: str = "general meal"
+    calories_remaining: int = 600
+
+
+@app.post("/api/food/quick-decision")
+async def quick_food_decision(data: QuickFoodRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == data.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_dict = {
+        "goal": user.goal,
+        "dietary_restrictions": user.dietary_restrictions,
+    }
+    return ai_service.get_quick_food_decision(
+        user_dict, data.restaurant, data.meal_context, data.calories_remaining
+    )
+
+
+# ─── Timed Workout Generator ──────────────────────────────────────────────────
+
+class TimedWorkoutRequest(BaseModel):
+    user_id: int
+    available_minutes: int
+    equipment: str = "no equipment"
+    focus_area: Optional[str] = None
+
+
+@app.post("/api/workouts/timed")
+async def generate_timed_workout(data: TimedWorkoutRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == data.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_dict = {
+        "name": user.name,
+        "goal": user.goal,
+        "fitness_level": user.fitness_level,
+    }
+    return ai_service.generate_timed_workout(
+        user_dict, data.available_minutes, data.equipment, data.focus_area
+    )
+
+
+# ─── Body Recomposition Guidance ─────────────────────────────────────────────
+
+@app.get("/api/recomposition/{user_id}")
+async def recomposition_guidance(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_dict = {
+        "age": user.age,
+        "height_cm": user.height_cm,
+        "weight_kg": user.weight_kg,
+        "activity_level": user.activity_level,
+        "fitness_level": user.fitness_level,
+        "dietary_restrictions": user.dietary_restrictions,
+        "goal": user.goal,
+    }
+    return ai_service.get_recomposition_guidance(user_dict)
+
+
+# ─── Budget Meal Plan ─────────────────────────────────────────────────────────
+
+@app.get("/api/budget-plan/{user_id}")
+async def budget_meal_plan(
+    user_id: int,
+    weekly_budget: float = 50.0,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_dict = {
+        "goal": user.goal,
+        "activity_level": user.activity_level,
+        "dietary_restrictions": user.dietary_restrictions,
+    }
+    return ai_service.get_budget_meal_plan(user_dict, weekly_budget)
+
+
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "2.0.0"}

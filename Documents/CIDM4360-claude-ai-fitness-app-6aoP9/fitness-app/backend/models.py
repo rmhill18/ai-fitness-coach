@@ -119,3 +119,37 @@ class BodyAnalysis(Base):
     ai_assessment = Column(Text)
     recommendations = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class WearableData(Base):
+    __tablename__ = "wearable_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    log_date = Column(Date, index=True)
+    sleep_score = Column(Integer)          # 0-100
+    sleep_hours = Column(Float)
+    hrv_ms = Column(Float)                 # Heart rate variability in ms
+    resting_heart_rate = Column(Integer)   # bpm
+    recovery_score = Column(Integer)       # 0-100
+    spo2_pct = Column(Float)               # Blood oxygen %
+    steps = Column(Integer)
+    active_calories = Column(Integer)
+    device_type = Column(String(50), default="manual")  # fitbit, apple_watch, oura, garmin, manual
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class DailyCheckin(Base):
+    __tablename__ = "daily_checkins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    checkin_date = Column(Date, index=True)
+    mood = Column(Integer)           # 1-5
+    energy_level = Column(Integer)   # 1-5
+    sleep_quality = Column(Integer)  # 1-5
+    stress_level = Column(Integer)   # 1-5
+    muscle_soreness = Column(Integer)  # 1-5
+    notes = Column(Text, default="")
+    streak_days = Column(Integer, default=1)
+    created_at = Column(DateTime, server_default=func.now())
