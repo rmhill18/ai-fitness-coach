@@ -11,8 +11,10 @@ interface Props {
 const GOALS = [
   { value: 'weight_loss', label: 'Weight Loss', emoji: '🏃' },
   { value: 'muscle_gain', label: 'Muscle Gain', emoji: '💪' },
+  { value: 'recomposition', label: 'Recomposition', emoji: '🔄' },
   { value: 'maintenance', label: 'Maintenance', emoji: '⚖️' },
   { value: 'endurance', label: 'Endurance', emoji: '🚴' },
+  { value: 'budget', label: 'Budget Fitness', emoji: '💰' },
 ];
 
 const ACTIVITY_LEVELS = [
@@ -182,9 +184,29 @@ export default function UserProfilePage({ existing, onSave }: Props) {
               >
                 <div className="text-2xl mb-1">{g.emoji}</div>
                 <div className="font-semibold text-sm text-white">{g.label}</div>
+                {g.value === 'recomposition' && (
+                  <div className="text-xs text-gray-400 mt-0.5">Lose fat + gain muscle</div>
+                )}
+                {g.value === 'budget' && (
+                  <div className="text-xs text-gray-400 mt-0.5">Low-cost, no equipment</div>
+                )}
               </button>
             ))}
           </div>
+          {form.goal === 'recomposition' && (
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3">
+              <p className="text-xs text-purple-300">
+                <span className="font-bold">Recomposition</span>: Simultaneously lose fat and build muscle through precise nutrition cycling and strategic training. Best for intermediate+ users.
+              </p>
+            </div>
+          )}
+          {form.goal === 'budget' && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3">
+              <p className="text-xs text-yellow-300">
+                <span className="font-bold">Budget Fitness</span>: Plans built around cheap, accessible foods (eggs, rice, beans, oats) and bodyweight/minimal equipment workouts.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Activity Level */}

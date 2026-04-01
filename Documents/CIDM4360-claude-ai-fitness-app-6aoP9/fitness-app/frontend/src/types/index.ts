@@ -4,10 +4,63 @@ export interface UserProfile {
   age: number;
   height_cm: number;
   weight_kg: number;
-  goal: 'weight_loss' | 'muscle_gain' | 'maintenance' | 'endurance';
+  goal: 'weight_loss' | 'muscle_gain' | 'maintenance' | 'endurance' | 'recomposition' | 'budget';
   activity_level: 'sedentary' | 'light' | 'moderate' | 'very_active';
   fitness_level: 'beginner' | 'intermediate' | 'advanced';
   dietary_restrictions: string;
+}
+
+export interface SleepEntry {
+  id: number;
+  log_date: string;
+  hours_slept: number;
+  quality_score: number;
+  bedtime: string;
+  wake_time: string;
+  notes: string;
+}
+
+export interface CheckInEntry {
+  id: number;
+  checkin_date: string;
+  mood: number;
+  energy_level: number;
+  stress_level: number;
+  logged_meals: boolean;
+  completed_workout: boolean;
+  hit_water_goal: boolean;
+  notes: string;
+}
+
+export interface DeviceDataEntry {
+  id: number;
+  log_date: string;
+  device_type: string;
+  sleep_score: number | null;
+  sleep_hours: number | null;
+  sleep_stages: string;
+  hrv_ms: number | null;
+  resting_hr: number | null;
+  steps: number | null;
+  active_calories: number | null;
+  total_calories: number | null;
+  active_minutes: number | null;
+  recovery_score: number | null;
+  readiness_score: number | null;
+  spo2_pct: number | null;
+  stress_score: number | null;
+}
+
+export interface NotificationSettings {
+  meal_reminders: boolean;
+  workout_reminders: boolean;
+  checkin_reminders: boolean;
+  water_reminders: boolean;
+  morning_checkin_time: string;
+  meal_reminder_times: string;
+  workout_reminder_time: string;
+  push_endpoint: string;
+  push_keys: string;
 }
 
 export interface Exercise {

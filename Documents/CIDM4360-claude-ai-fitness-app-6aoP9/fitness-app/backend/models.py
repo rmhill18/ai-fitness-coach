@@ -119,3 +119,74 @@ class BodyAnalysis(Base):
     ai_assessment = Column(Text)
     recommendations = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class SleepLog(Base):
+    __tablename__ = "sleep_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    log_date = Column(Date, index=True)
+    hours_slept = Column(Float)
+    quality_score = Column(Integer)  # 1-10
+    bedtime = Column(String(10))   # e.g. "22:30"
+    wake_time = Column(String(10))  # e.g. "06:30"
+    notes = Column(Text, default="")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class CheckIn(Base):
+    __tablename__ = "check_ins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    checkin_date = Column(Date, index=True)
+    mood = Column(Integer)         # 1-5
+    energy_level = Column(Integer) # 1-10
+    stress_level = Column(Integer) # 1-10
+    logged_meals = Column(Boolean, default=False)
+    completed_workout = Column(Boolean, default=False)
+    hit_water_goal = Column(Boolean, default=False)
+    notes = Column(Text, default="")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class NotificationSetting(Base):
+    __tablename__ = "notification_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, unique=True, index=True)
+    meal_reminders = Column(Boolean, default=True)
+    workout_reminders = Column(Boolean, default=True)
+    checkin_reminders = Column(Boolean, default=True)
+    water_reminders = Column(Boolean, default=True)
+    morning_checkin_time = Column(String(5), default="07:00")
+    meal_reminder_times = Column(Text, default='["08:00","12:00","18:00"]')  # JSON
+    workout_reminder_time = Column(String(5), default="17:00")
+    push_endpoint = Column(Text, default="")
+    push_keys = Column(Text, default="")  # JSON with p256dh and auth
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class DeviceData(Base):
+    __tablename__ = "device_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    log_date = Column(Date, index=True)
+    device_type = Column(String(50), default="manual")  # fitbit, apple, garmin, oura, whoop, manual
+    sleep_score = Column(Integer)        # 0-100
+    sleep_hours = Column(Float)
+    sleep_stages = Column(Text)          # JSON: {deep, light, rem, awake}
+    hrv_ms = Column(Float)               # Heart rate variability in ms
+    resting_hr = Column(Integer)         # Beats per minute
+    steps = Column(Integer)
+    active_calories = Column(Integer)
+    total_calories = Column(Integer)
+    active_minutes = Column(Integer)
+    recovery_score = Column(Integer)     # 0-100
+    readiness_score = Column(Integer)    # 0-100 (Oura style)
+    spo2_pct = Column(Float)             # Blood oxygen %
+    stress_score = Column(Integer)       # 0-100
+    raw_data = Column(Text, default="{}")  # JSON raw device response
+    created_at = Column(DateTime, server_default=func.now())

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Sparkles, Dumbbell, Utensils, Footprints, Droplets,
-  ChevronDown, ChevronUp, RefreshCw, Clock, Flame, Target
+  ChevronDown, ChevronUp, RefreshCw, Clock, Flame, Target,
+  Zap, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { generateDailyPlan, getDailyPlan } from '../api/client';
 import type { DailyPlan, UserProfile } from '../types';
@@ -9,6 +10,28 @@ import type { DailyPlan, UserProfile } from '../types';
 interface Props {
   user: UserProfile;
   onPlanReady?: (plan: DailyPlan) => void;
+}
+
+interface QuickDirective {
+  greeting: string;
+  workout_directive: {
+    do_it: boolean;
+    what: string;
+    when: string;
+    how_long: number;
+    top_3_exercises: string[];
+    skip_reason?: string;
+  };
+  nutrition_directive: {
+    calorie_target: number;
+    protein_target_g: number;
+    next_meal: string;
+    next_meal_cals: number;
+    avoid_today: string;
+    drink_water_oz: number;
+  };
+  one_thing: string;
+  quick_wins: string[];
 }
 
 function MacroRing({ label, value, target, color }: {
@@ -41,6 +64,9 @@ export default function DailyPlanPage({ user, onPlanReady }: Props) {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>('workout');
+  const [activeView, setActiveView] = useState<'full' | 'quick'>('full');
+  const [quickDirective, setQuickDirective] = useState<QuickDirective | null>(null);
+  const [loadingQuick, setLoadingQuick] = useState(false);
   const today = new Date().toISOString().split('T')[0];
 
   const loadPlan = async () => {
@@ -68,6 +94,23 @@ export default function DailyPlanPage({ user, onPlanReady }: Props) {
       console.error(e);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const loadQuickDirective = async () => {
+    setLoadingQuick(true);
+    try {
+      const res = await fetch('/api/quick-directive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const data = await res.json();
+      setQuickDirective(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingQuick(false);
     }
   };
 
@@ -120,6 +163,167 @@ export default function DailyPlanPage({ user, onPlanReady }: Props) {
           {generating ? 'Generating…' : 'Regenerate'}
         </button>
       </div>
+
+      {/* View Toggle */}
+      <div className="flex gap-2 p-1 bg-gray-900 rounded-xl border border-gray-800">
+        <button
+          onClick={() => setActiveView('full')}
+          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+            activeView === 'full'
+              ? 'bg-primary-500 text-white'
+              : 'text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          Full Plan
+        </button>
+        <button
+          onClick={() => {
+            setActiveView('quick');
+            if (!quickDirective) loadQuickDirective();
+          }}
+          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
+            activeView === 'quick'
+              ? 'bg-yellow-500 text-gray-900'
+              : 'text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          <Zap className="w-3.5 h-3.5" /> Just Tell Me What To Do
+        </button>
+      </div>
+
+      {/* Quick Directive View */}
+      {activeView === 'quick' && (
+        <div className="space-y-4">
+          {loadingQuick ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="w-8 h-8 border-2 border-yellow-500/30 border-t-yellow-500 rounded-full spin" />
+              <p className="text-gray-400 text-sm">Getting your directive…</p>
+            </div>
+          ) : quickDirective ? (
+            <>
+              {/* Greeting */}
+              <div className="card bg-yellow-500/10 border-yellow-500/30">
+                <p className="text-yellow-200 font-semibold">{quickDirective.greeting}</p>
+              </div>
+
+              {/* One Thing */}
+              <div className="card bg-primary-500/10 border-primary-500/30">
+                <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider mb-1">Today's #1 Priority</p>
+                <p className="text-white font-bold text-base">{quickDirective.one_thing}</p>
+              </div>
+
+              {/* Workout Directive */}
+              <div className="card">
+                <div className="flex items-center gap-2 mb-3">
+                  <Dumbbell className="w-5 h-5 text-primary-400" />
+                  <h3 className="font-bold text-white">Workout</h3>
+                  {quickDirective.workout_directive.do_it ? (
+                    <span className="badge bg-green-500/20 text-green-400 ml-auto">Do It Today</span>
+                  ) : (
+                    <span className="badge bg-red-500/20 text-red-400 ml-auto">Rest Day</span>
+                  )}
+                </div>
+
+                {quickDirective.workout_directive.do_it ? (
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <div className="flex-1 bg-gray-800 rounded-xl p-3">
+                        <p className="text-xs text-gray-400">Workout</p>
+                        <p className="font-bold text-white text-sm mt-0.5">{quickDirective.workout_directive.what}</p>
+                      </div>
+                      <div className="bg-gray-800 rounded-xl p-3 text-center">
+                        <p className="text-xs text-gray-400">Duration</p>
+                        <p className="font-bold text-white text-sm mt-0.5">{quickDirective.workout_directive.how_long} min</p>
+                      </div>
+                    </div>
+                    <div className="bg-gray-800 rounded-xl p-3">
+                      <p className="text-xs text-gray-400 mb-1">Best time: <span className="text-blue-400 font-semibold">{quickDirective.workout_directive.when}</span></p>
+                      <p className="text-xs font-semibold text-gray-300 mb-2">Top 3 exercises:</p>
+                      {quickDirective.workout_directive.top_3_exercises.map((ex, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm text-gray-300 mb-1">
+                          <span className="w-5 h-5 bg-primary-500/20 rounded-full flex items-center justify-center text-xs text-primary-400 font-bold flex-shrink-0">{i + 1}</span>
+                          {ex}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+                    <p className="text-sm text-red-200">{quickDirective.workout_directive.skip_reason}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Nutrition Directive */}
+              <div className="card">
+                <div className="flex items-center gap-2 mb-3">
+                  <Utensils className="w-5 h-5 text-orange-400" />
+                  <h3 className="font-bold text-white">Nutrition</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="bg-gray-800 rounded-xl p-3 text-center">
+                    <p className="text-xs text-gray-400">Calories</p>
+                    <p className="font-bold text-orange-400 text-lg">{quickDirective.nutrition_directive.calorie_target}</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-xl p-3 text-center">
+                    <p className="text-xs text-gray-400">Protein</p>
+                    <p className="font-bold text-green-400 text-lg">{quickDirective.nutrition_directive.protein_target_g}g</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-3">
+                    <p className="text-xs text-primary-400 font-semibold mb-0.5">Eat next:</p>
+                    <p className="text-sm text-white font-semibold">{quickDirective.nutrition_directive.next_meal}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{quickDirective.nutrition_directive.next_meal_cals} cal</p>
+                  </div>
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+                    <p className="text-xs text-red-400 font-semibold mb-0.5">Avoid today:</p>
+                    <p className="text-sm text-gray-300">{quickDirective.nutrition_directive.avoid_today}</p>
+                  </div>
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 flex items-center gap-2">
+                    <Droplets className="w-4 h-4 text-blue-400" />
+                    <p className="text-sm text-gray-300">Drink <span className="text-blue-400 font-bold">{quickDirective.nutrition_directive.drink_water_oz} oz</span> of water today</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Wins */}
+              {quickDirective.quick_wins?.length > 0 && (
+                <div className="card">
+                  <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-400" /> Quick Wins (2 min each)
+                  </h3>
+                  {quickDirective.quick_wins.map((w, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-gray-300 mb-2">
+                      <div className="w-4 h-4 border border-gray-600 rounded flex-shrink-0" />
+                      {w}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={loadQuickDirective}
+                disabled={loadingQuick}
+                className="btn-secondary w-full flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" /> Refresh Directive
+              </button>
+            </>
+          ) : (
+            <div className="text-center py-12">
+              <Zap className="w-10 h-10 text-yellow-400 mx-auto mb-3" />
+              <p className="text-gray-400 mb-4">Get a simple, no-BS plan for today</p>
+              <button onClick={loadQuickDirective} className="btn-primary flex items-center gap-2 mx-auto">
+                <Zap className="w-4 h-4" /> Get My Directive
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Full Plan View */}
+      {activeView === 'full' && (<>
 
       {/* AI Coach Note */}
       {plan.ai_notes && (
@@ -284,6 +488,7 @@ export default function DailyPlanPage({ user, onPlanReady }: Props) {
           )}
         </div>
       )}
+      </>)}
     </div>
   );
 }

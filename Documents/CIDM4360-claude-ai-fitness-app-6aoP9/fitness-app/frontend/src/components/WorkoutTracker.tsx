@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Dumbbell, Plus, Clock, Flame, Zap, CheckCircle2,
-  X, ChevronDown, RefreshCw, Trophy
+  X, ChevronDown, RefreshCw, Trophy, Timer, Wrench
 } from 'lucide-react';
 import { logWorkout, getWorkouts, getAdaptiveWorkout } from '../api/client';
 import type { WorkoutLog, UserProfile } from '../types';
@@ -29,11 +29,28 @@ function EffortDots({ value, onChange }: { value: number; onChange: (v: number) 
   );
 }
 
+const TIME_PRESETS = [15, 20, 30, 45, 60];
+const EQUIPMENT_OPTIONS = [
+  { value: 'none', label: 'Bodyweight Only' },
+  { value: 'dumbbells', label: 'Dumbbells' },
+  { value: 'barbell', label: 'Barbell + Rack' },
+  { value: 'resistance bands', label: 'Resistance Bands' },
+  { value: 'full gym', label: 'Full Gym' },
+];
+
 export default function WorkoutTracker({ user }: Props) {
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
   const [showLog, setShowLog] = useState(false);
   const [adaptiveWorkout, setAdaptiveWorkout] = useState<any>(null);
   const [loadingAdaptive, setLoadingAdaptive] = useState(false);
+  const [timeWorkout, setTimeWorkout] = useState<any>(null);
+  const [loadingTime, setLoadingTime] = useState(false);
+  const [showTimeForm, setShowTimeForm] = useState(false);
+  const [timeForm, setTimeForm] = useState({
+    available_minutes: 30,
+    equipment: 'none',
+    focus: '',
+  });
   const [form, setForm] = useState({
     workout_type: '',
     duration_minutes: '',
@@ -58,6 +75,28 @@ export default function WorkoutTracker({ user }: Props) {
       setAdaptiveWorkout(w);
     } finally {
       setLoadingAdaptive(false);
+    }
+  };
+
+  const generateTimeWorkout = async () => {
+    setLoadingTime(true);
+    setTimeWorkout(null);
+    try {
+      const res = await fetch('/api/workouts/time-based', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          available_minutes: timeForm.available_minutes,
+          equipment: timeForm.equipment,
+          focus: timeForm.focus || null,
+        }),
+      });
+      const data = await res.json();
+      setTimeWorkout(data);
+      setShowTimeForm(false);
+    } finally {
+      setLoadingTime(false);
     }
   };
 
@@ -115,6 +154,136 @@ export default function WorkoutTracker({ user }: Props) {
           <p className="text-xl font-bold text-white">{Math.round(totalCal)}</p>
           <p className="text-xs text-gray-400">Calories</p>
         </div>
+      </div>
+
+      {/* Time-Based Workout */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="section-title mb-0 flex items-center gap-2">
+            <Timer className="w-5 h-5 text-blue-400" /> Time-Based Workout
+          </h2>
+          <button
+            onClick={() => setShowTimeForm(f => !f)}
+            className="btn-secondary py-1.5 px-3 text-sm flex items-center gap-1.5"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            {showTimeForm ? 'Hide' : 'Set Up'}
+          </button>
+        </div>
+
+        {showTimeForm && (
+          <div className="space-y-3 mb-4 p-3 bg-gray-800 rounded-xl">
+            <div>
+              <label className="label">Available Time</label>
+              <div className="flex gap-2 flex-wrap">
+                {TIME_PRESETS.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTimeForm(f => ({ ...f, available_minutes: t }))}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                      timeForm.available_minutes === t
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {t} min
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  className="input w-24 py-1.5 text-sm"
+                  placeholder="Custom"
+                  value={timeForm.available_minutes}
+                  onChange={e => setTimeForm(f => ({ ...f, available_minutes: parseInt(e.target.value) || 30 }))}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="label">Equipment</label>
+              <select
+                className="input"
+                value={timeForm.equipment}
+                onChange={e => setTimeForm(f => ({ ...f, equipment: e.target.value }))}
+              >
+                {EQUIPMENT_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Focus (optional)</label>
+              <input
+                className="input"
+                placeholder="e.g., upper body, legs, cardio, full body"
+                value={timeForm.focus}
+                onChange={e => setTimeForm(f => ({ ...f, focus: e.target.value }))}
+              />
+            </div>
+            <button
+              onClick={generateTimeWorkout}
+              disabled={loadingTime}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              {loadingTime
+                ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full spin" />Building {timeForm.available_minutes}-Min Workout…</>
+                : <><Timer className="w-4 h-4" />Generate {timeForm.available_minutes}-Min Workout</>
+              }
+            </button>
+          </div>
+        )}
+
+        {timeWorkout ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white">{timeWorkout.workout_name}</h3>
+              <span className={`badge ${
+                timeWorkout.intensity === 'very high' || timeWorkout.intensity === 'high' ? 'bg-red-500/20 text-red-400'
+                : timeWorkout.intensity === 'moderate' ? 'bg-yellow-500/20 text-yellow-400'
+                : 'bg-green-500/20 text-green-400'
+              }`}>{timeWorkout.intensity}</span>
+            </div>
+            <div className="flex gap-3 text-sm text-gray-400">
+              <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-blue-400" />{timeWorkout.total_minutes} min</span>
+              <span className="flex items-center gap-1"><Flame className="w-4 h-4 text-orange-400" />{timeWorkout.estimated_calories} cal</span>
+              <span className="flex items-center gap-1"><Wrench className="w-4 h-4 text-gray-400" />{timeWorkout.equipment_needed}</span>
+            </div>
+            {timeWorkout.why_this_works && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3">
+                <p className="text-sm text-blue-200">{timeWorkout.why_this_works}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider mb-2">Warmup ({timeWorkout.warmup_minutes} min)</p>
+              {timeWorkout.warmup?.map((ex: any, i: number) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-gray-300 mb-1">
+                  <div className="w-1.5 h-1.5 bg-primary-400 rounded-full flex-shrink-0" />
+                  {ex.exercise} — {ex.duration_seconds}s
+                </div>
+              ))}
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-white uppercase tracking-wider mb-2">Main ({timeWorkout.main_minutes} min)</p>
+              <div className="space-y-2">
+                {timeWorkout.main_workout?.map((ex: any, i: number) => (
+                  <div key={i} className="bg-gray-800 rounded-xl p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-sm text-white">{ex.exercise}</span>
+                      <span className="text-xs text-gray-400 bg-gray-700 px-2 py-0.5 rounded-full">
+                        {ex.sets} × {ex.reps_or_duration}
+                      </span>
+                    </div>
+                    {ex.notes && <p className="text-xs text-gray-400 mt-1">{ex.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : !showTimeForm && (
+          <p className="text-sm text-gray-400 text-center py-4">
+            Set your available time and get a perfectly timed workout
+          </p>
+        )}
       </div>
 
       {/* Adaptive Workout */}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Sparkles, Utensils, Dumbbell,
-  TrendingUp, BarChart2, Scan, User
+  TrendingUp, BarChart2, Scan, User, Watch, CheckSquare, Sandwich
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import DailyPlan from './components/DailyPlan';
@@ -11,15 +11,26 @@ import ProgressAnalysis from './components/ProgressAnalysis';
 import WeeklyReport from './components/WeeklyReport';
 import BodyAnalysis from './components/BodyAnalysis';
 import UserProfilePage from './components/UserProfile';
+import Accountability from './components/Accountability';
+import DeviceDashboard from './components/DeviceDashboard';
+import FoodAdvisor from './components/FoodAdvisor';
 import type { UserProfile } from './types';
 
 const STORAGE_KEY = 'fitness_user_id';
+
+// Register service worker for notifications
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+}
 
 const NAV_TABS = [
   { id: 'home', label: 'Home', icon: LayoutDashboard },
   { id: 'plan', label: 'Plan', icon: Sparkles },
   { id: 'meals', label: 'Meals', icon: Utensils },
   { id: 'workout', label: 'Train', icon: Dumbbell },
+  { id: 'food', label: 'Advisor', icon: Sandwich },
+  { id: 'device', label: 'Device', icon: Watch },
+  { id: 'accountability', label: 'Check-In', icon: CheckSquare },
   { id: 'progress', label: 'Progress', icon: TrendingUp },
   { id: 'report', label: 'Report', icon: BarChart2 },
   { id: 'body', label: 'Body', icon: Scan },
@@ -88,6 +99,9 @@ export default function App() {
       case 'plan': return <DailyPlan user={user} />;
       case 'meals': return <MealLogger user={user} />;
       case 'workout': return <WorkoutTracker user={user} />;
+      case 'food': return <FoodAdvisor user={user} />;
+      case 'device': return <DeviceDashboard user={user} />;
+      case 'accountability': return <Accountability user={user} />;
       case 'progress': return <ProgressAnalysis user={user} />;
       case 'report': return <WeeklyReport user={user} />;
       case 'body': return <BodyAnalysis user={user} />;
@@ -132,24 +146,26 @@ export default function App() {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-950/95 backdrop-blur-sm border-t border-gray-800 z-10">
-        <div className="max-w-2xl mx-auto grid grid-cols-8">
-          {NAV_TABS.map(tab => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center py-2.5 gap-0.5 transition-colors ${
-                  active ? 'text-primary-400' : 'text-gray-500 hover:text-gray-400'
-                }`}
-              >
-                <Icon className={`w-5 h-5 ${active ? 'drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]' : ''}`} />
-                <span className="text-[10px] font-medium">{tab.label}</span>
-                {active && <div className="w-1 h-1 bg-primary-400 rounded-full" />}
-              </button>
-            );
-          })}
+        <div className="max-w-2xl mx-auto overflow-x-auto scrollbar-hide">
+          <div className="flex min-w-max">
+            {NAV_TABS.map(tab => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex flex-col items-center py-2.5 px-3 gap-0.5 transition-colors flex-shrink-0 ${
+                    active ? 'text-primary-400' : 'text-gray-500 hover:text-gray-400'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${active ? 'drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]' : ''}`} />
+                  <span className="text-[10px] font-medium">{tab.label}</span>
+                  {active && <div className="w-1 h-1 bg-primary-400 rounded-full" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
     </div>
