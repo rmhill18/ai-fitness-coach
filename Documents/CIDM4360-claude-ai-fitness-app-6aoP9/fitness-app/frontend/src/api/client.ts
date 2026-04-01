@@ -114,3 +114,13 @@ export const analyzeBody = (userId: number, file: File) => {
 
 export const getBodyHistory = (userId: number) =>
   api.get(`/body/history/${userId}`).then(r => r.data);
+
+// AI Coach Chat
+export const chatWithCoach = (
+  userId: number,
+  message: string,
+  history: Array<{ role: string; content: string }> = [],
+) =>
+  api
+    .post<{ response: string }>(`/coach/chat/${userId}`, { message, history })
+    .then(r => r.data);
