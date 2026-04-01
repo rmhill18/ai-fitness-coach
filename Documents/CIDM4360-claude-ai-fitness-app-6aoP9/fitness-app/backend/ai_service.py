@@ -390,6 +390,36 @@ Note: All estimates are visual approximations. Always recommend professional med
     return _parse_json_response(text)
 
 
+def chat_with_coach(user: dict, message: str, history: list = []) -> str:
+    """Conversational AI coach — knows the user's profile and responds naturally."""
+    system_prompt = f"""You are Coach, an expert AI personal fitness and nutrition coach inside a fitness app. You are helping {user.get('name', 'the user')}.
+
+USER PROFILE:
+- Goal: {user.get('goal', 'maintenance').replace('_', ' ')}
+- Age: {user.get('age')} | Weight: {user.get('weight_kg')}kg | Height: {user.get('height_cm')}cm
+- Fitness Level: {user.get('fitness_level', 'intermediate')}
+- Activity Level: {user.get('activity_level', 'moderate')}
+- Dietary Restrictions: {user.get('dietary_restrictions') or 'none'}
+
+GUIDELINES:
+- Be encouraging, specific, and evidence-based
+- Keep responses concise (2-4 sentences) unless detailed info is requested
+- Reference their specific goal and stats when relevant
+- Use friendly, motivating tone — like a real coach texting them
+- If asked for workouts or meal plans, give concrete examples
+- Never give medical diagnoses — recommend seeing a doctor for medical concerns"""
+
+    messages = list(history) + [{"role": "user", "content": message}]
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        system=system_prompt,
+        messages=messages,
+    )
+    return response.content[0].text
+
+
 def generate_adaptive_workout(
     user: dict,
     missed_workouts: int,

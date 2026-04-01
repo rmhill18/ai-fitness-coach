@@ -1,0 +1,20 @@
+{
+  "name": "AI Fitness Coach",
+  "short_name": "FitCoach",
+  "description": "Your AI-powered personal fitness and nutrition coach",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#22c55e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "fitness", "lifestyle"],
+  "screenshots": []
+}

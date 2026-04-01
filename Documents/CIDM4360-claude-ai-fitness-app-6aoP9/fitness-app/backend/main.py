@@ -612,3 +612,42 @@ async def get_body_history(user_id: int, db: AsyncSession = Depends(get_db)):
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "version": "1.0.0"}
+
+
+# ─── AI Coach Chat ────────────────────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+
+@app.post("/api/coach/chat/{user_id}")
+async def coach_chat(
+    user_id: int,
+    data: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_dict = {
+        "name": user.name,
+        "age": user.age,
+        "goal": user.goal,
+        "weight_kg": user.weight_kg,
+        "height_cm": user.height_cm,
+        "fitness_level": user.fitness_level,
+        "activity_level": user.activity_level,
+        "dietary_restrictions": user.dietary_restrictions,
+    }
+
+    history = [{"role": m.role, "content": m.content} for m in data.history]
+    reply = ai_service.chat_with_coach(user_dict, data.message, history)
+    return {"response": reply}
