@@ -7,6 +7,9 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? './' : '/',
   server: {
     port: 5173,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
     proxy: {
       '/api': {
         target: process.env.VITE_API_TARGET ?? 'http://localhost:8000',
