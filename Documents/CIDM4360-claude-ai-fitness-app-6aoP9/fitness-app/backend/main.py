@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt as _bcrypt_lib
 from pydantic import BaseModel
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,22 +39,21 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-to-a-long-random-secret-in-
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def _prepare_password(password: str) -> str:
-    """Pre-hash with SHA-256 so the value passed to bcrypt is always
-    exactly 64 bytes — safely under bcrypt's hard 72-byte limit."""
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+def _prepare_password(password: str) -> bytes:
+    """SHA-256 hash the password first so it is always exactly 32 bytes —
+    well under bcrypt's 72-byte hard limit regardless of input length."""
+    return hashlib.sha256(password.encode("utf-8")).digest()
 
 
 def _hash_password(password: str) -> str:
-    return pwd_context.hash(_prepare_password(password))
+    return _bcrypt_lib.hashpw(_prepare_password(password), _bcrypt_lib.gensalt()).decode("utf-8")
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(_prepare_password(plain), hashed)
+    return _bcrypt_lib.checkpw(_prepare_password(plain), hashed.encode("utf-8"))
 
 
 def _create_token(user_auth_id: int, email: str, user_profile_id: Optional[int]) -> str:
