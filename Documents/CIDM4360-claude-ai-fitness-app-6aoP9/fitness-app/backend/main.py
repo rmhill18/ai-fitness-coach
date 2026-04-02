@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any module that reads env vars (e.g. ai_service)
+
 from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -30,8 +32,6 @@ from models import (
     WeeklyReport,
     WorkoutLog,
 )
-
-load_dotenv()
 
 # ─── Security / JWT ───────────────────────────────────────────────────────────
 
