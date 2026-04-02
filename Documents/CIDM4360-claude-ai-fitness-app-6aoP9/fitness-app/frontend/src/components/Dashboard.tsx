@@ -1,44 +1,61 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Footprints, Flame, Droplets, Dumbbell, TrendingUp,
-  Sparkles, Plus, CheckCircle2, Circle
+  Footprints, Flame, Droplets, Dumbbell,
+  TrendingUp, Utensils, Watch, Sparkles, CheckCircle2, Circle, Moon, Activity,
 } from 'lucide-react';
-import { getDailyPlan, getMeals, getWorkouts, logSteps, getSteps } from '../api/client';
-import type { DailyPlan, MealLog, WorkoutLog, UserProfile } from '../types';
+import { getDailyPlan, getMeals, getWorkouts, getSteps, getWearableData } from '../api/client';
+import type { DailyPlan, MealLog, WorkoutLog, UserProfile, WearableData } from '../types';
 
-interface Props {
-  user: UserProfile;
-  onNavigate: (tab: string) => void;
-}
+interface Props { user: UserProfile; onNavigate: (tab: string) => void; }
 
-function RingProgress({ value, max, size = 80, strokeWidth = 8, color = '#22c55e', children }: {
-  value: number; max: number; size?: number; strokeWidth?: number; color?: string; children?: React.ReactNode
+function RingProgress({ value, max, size = 72, strokeWidth = 7, color, children }: {
+  value: number; max: number; size?: number; strokeWidth?: number; color: string; children?: React.ReactNode;
 }) {
-  const radius = (size - strokeWidth * 2) / 2;
-  const circumference = 2 * Math.PI * radius;
+  const r = (size - strokeWidth * 2) / 2;
+  const circ = 2 * Math.PI * r;
   const pct = Math.min(value / Math.max(max, 1), 1);
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#1f2937" strokeWidth={strokeWidth} />
-        <circle
-          cx={size/2} cy={size/2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
-          strokeDasharray={`${pct * circumference} ${circumference}`}
-          strokeLinecap="round"
-        />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#1f2937" strokeWidth={strokeWidth} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={strokeWidth}
+          strokeDasharray={`${pct * circ} ${circ}`} strokeLinecap="round"
+          className="transition-all duration-700" />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">{children}</div>
     </div>
   );
 }
 
+function HealthPill({ icon: Icon, label, value, unit, color }: {
+  icon: React.ElementType; label: string; value: number | string; unit?: string; color: string;
+}) {
+  return (
+    <div className="flex-1 bg-gray-900 rounded-2xl p-3 flex flex-col items-center gap-1 min-w-0">
+      <Icon className={`w-4 h-4 ${color}`} />
+      <p className="text-white font-bold text-base leading-none">
+        {typeof value === 'number' ? value.toLocaleString() : value}
+        {unit && <span className="text-gray-500 text-xs font-normal ml-0.5">{unit}</span>}
+      </p>
+      <p className="text-gray-500 text-[10px]">{label}</p>
+    </div>
+  );
+}
+
+const SHORTCUTS = [
+  { id: 'meals',    label: 'Meals',    sub: 'Log food', icon: Utensils,   color: 'text-orange-400', bg: 'bg-orange-500/15' },
+  { id: 'training', label: 'Training', sub: 'Plan & train', icon: Dumbbell,   color: 'text-primary-400', bg: 'bg-primary-500/15' },
+  { id: 'progress', label: 'Progress', sub: 'AI analysis', icon: TrendingUp, color: 'text-purple-400', bg: 'bg-purple-500/15' },
+  { id: 'health',   label: 'Health',   sub: 'Sleep & recovery', icon: Watch,     color: 'text-cyan-400',  bg: 'bg-cyan-500/15' },
+];
+
 export default function Dashboard({ user, onNavigate }: Props) {
-  const [plan, setPlan] = useState<DailyPlan | null>(null);
-  const [meals, setMeals] = useState<MealLog[]>([]);
+  const [plan,     setPlan]     = useState<DailyPlan | null>(null);
+  const [meals,    setMeals]    = useState<MealLog[]>([]);
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
-  const [steps, setSteps] = useState(0);
-  const [stepsInput, setStepsInput] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [steps,    setSteps]    = useState(0);
+  const [wearable, setWearable] = useState<WearableData | null>(null);
+  const [loading,  setLoading]  = useState(true);
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
@@ -47,177 +64,111 @@ export default function Dashboard({ user, onNavigate }: Props) {
       getMeals(user.id, today),
       getWorkouts(user.id, 1),
       getSteps(user.id, 1),
-    ]).then(([p, m, w, s]) => {
+      getWearableData(user.id, 1),
+    ]).then(([p, m, w, s, wd]) => {
       setPlan(p);
       setMeals(m);
-      setWorkouts(w.filter(wk => wk.log_date === today));
-      const todaySteps = s.find(st => st.log_date === today);
+      setWorkouts(w.filter((wk: WorkoutLog) => wk.log_date === today));
+      const todaySteps = s.find((st: { log_date: string; steps: number }) => st.log_date === today);
       setSteps(todaySteps?.steps ?? 0);
+      const todayWearable = wd?.find((d: WearableData) => d.log_date === today);
+      setWearable(todayWearable ?? null);
     }).finally(() => setLoading(false));
   }, [user.id]);
 
-  const totalCals = meals.reduce((s, m) => s + m.calories, 0);
+  const totalCals    = meals.reduce((s, m) => s + m.calories, 0);
   const totalProtein = meals.reduce((s, m) => s + m.protein_g, 0);
   const todayWorkout = workouts.find(w => w.completed);
+  const stepTarget   = plan?.step_target ?? 10000;
 
-  const handleStepUpdate = async () => {
-    const n = parseInt(stepsInput);
-    if (!isNaN(n) && n >= 0) {
-      await logSteps(user.id, today, n);
-      setSteps(n);
-      setStepsInput('');
-    }
-  };
-
-  const bmi = (user.weight_kg / ((user.height_cm / 100) ** 2)).toFixed(1);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full spin" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center py-24">
+      <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full spin" />
+    </div>
+  );
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-5 space-y-4 fade-in">
+
       {/* Greeting */}
       <div>
         <h1 className="text-2xl font-black text-white">
-          Hey {user.name.split(' ')[0]}! 👋
+          Hey {user.name.split(' ')[0]} 👋
         </h1>
         <p className="text-gray-400 text-sm mt-0.5">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </p>
       </div>
 
-      {/* Quick Stats Row */}
-      <div className="grid grid-cols-4 gap-2">
-        {[
-          { label: 'BMI', value: bmi, color: 'text-blue-400' },
-          { label: 'Goal', value: user.goal.replace('_', ' '), color: 'text-green-400' },
-          { label: 'Level', value: user.fitness_level, color: 'text-purple-400' },
-          { label: 'Activity', value: user.activity_level.replace('_', ' '), color: 'text-orange-400' },
-        ].map(s => (
-          <div key={s.label} className="card text-center p-2">
-            <p className={`text-xs font-bold capitalize ${s.color}`}>{s.value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
-          </div>
-        ))}
+      {/* ── Auto Health Bar ── */}
+      <div className="flex gap-2">
+        <HealthPill icon={Footprints} label="Steps"    value={steps}                       unit="" color="text-primary-400" />
+        <HealthPill icon={Moon}       label="Sleep"     value={wearable?.sleep_score ?? '—'} unit={wearable?.sleep_score ? '/100' : ''} color="text-indigo-400" />
+        <HealthPill icon={Activity}   label="Recovery"  value={wearable?.recovery_score ?? '—'} unit={wearable?.recovery_score ? '/100' : ''} color="text-emerald-400" />
       </div>
 
       {/* No Plan CTA */}
       {!plan && (
-        <button
-          onClick={() => onNavigate('plan')}
-          className="w-full card bg-primary-500/10 border-primary-500/30 hover:bg-primary-500/20 transition-colors flex items-center gap-4 p-4"
-        >
-          <div className="w-12 h-12 bg-primary-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+        <button onClick={() => onNavigate('training')}
+          className="w-full card bg-primary-500/10 border-primary-500/30 hover:bg-primary-500/15 transition-colors flex items-center gap-4 p-4">
+          <div className="w-12 h-12 bg-primary-500/20 rounded-2xl flex items-center justify-center shrink-0">
             <Sparkles className="w-6 h-6 text-primary-400" />
           </div>
           <div className="text-left">
             <p className="font-bold text-white">Generate Today's Plan</p>
-            <p className="text-sm text-primary-300">Your AI coach is ready to create a personalized plan</p>
+            <p className="text-sm text-primary-300 mt-0.5">Your AI coach is ready</p>
           </div>
         </button>
       )}
 
-      {/* Today's Progress */}
+      {/* Today's Progress Rings */}
       {plan && (
         <div className="card">
           <p className="section-title">Today's Progress</p>
           <div className="grid grid-cols-2 gap-4">
-            {/* Calories Ring */}
-            <div className="flex items-center gap-3">
-              <RingProgress value={totalCals} max={plan.calorie_target} size={72} color="#f97316">
-                <Flame className="w-5 h-5 text-orange-400" />
-              </RingProgress>
-              <div>
-                <p className="text-xs text-gray-400">Calories</p>
-                <p className="font-bold text-white">{Math.round(totalCals)}</p>
-                <p className="text-xs text-gray-500">/ {plan.calorie_target}</p>
+            {[
+              { value: totalCals,    max: plan.calorie_target,   color: '#f97316', icon: <Flame className="w-4 h-4 text-orange-400" />,    label: 'Calories', display: `${Math.round(totalCals)}`, sub: `/ ${plan.calorie_target}` },
+              { value: steps,        max: stepTarget,            color: '#3b82f6', icon: <Footprints className="w-4 h-4 text-primary-400" />, label: 'Steps',    display: steps.toLocaleString(),     sub: `/ ${stepTarget.toLocaleString()}` },
+              { value: totalProtein, max: plan.protein_target_g, color: '#34d399', icon: <span className="text-xs font-bold text-emerald-400">P</span>, label: 'Protein', display: `${Math.round(totalProtein)}g`, sub: `/ ${plan.protein_target_g}g` },
+              { value: 0,            max: plan.water_target_ml,  color: '#22d3ee', icon: <Droplets className="w-4 h-4 text-cyan-400" />,    label: 'Water',    display: '0ml',                        sub: `/ ${plan.water_target_ml}ml` },
+            ].map(ring => (
+              <div key={ring.label} className="flex items-center gap-3">
+                <RingProgress value={ring.value} max={ring.max} color={ring.color}>
+                  {ring.icon}
+                </RingProgress>
+                <div>
+                  <p className="text-xs text-gray-400">{ring.label}</p>
+                  <p className="font-bold text-white text-sm">{ring.display}</p>
+                  <p className="text-xs text-gray-500">{ring.sub}</p>
+                </div>
               </div>
-            </div>
-            {/* Steps Ring */}
-            <div className="flex items-center gap-3">
-              <RingProgress value={steps} max={plan.step_target} size={72} color="#60a5fa">
-                <Footprints className="w-5 h-5 text-blue-400" />
-              </RingProgress>
-              <div>
-                <p className="text-xs text-gray-400">Steps</p>
-                <p className="font-bold text-white">{steps.toLocaleString()}</p>
-                <p className="text-xs text-gray-500">/ {plan.step_target.toLocaleString()}</p>
-              </div>
-            </div>
-            {/* Protein Ring */}
-            <div className="flex items-center gap-3">
-              <RingProgress value={totalProtein} max={plan.protein_target_g} size={72} color="#22c55e">
-                <span className="text-xs font-bold text-green-400">P</span>
-              </RingProgress>
-              <div>
-                <p className="text-xs text-gray-400">Protein</p>
-                <p className="font-bold text-white">{Math.round(totalProtein)}g</p>
-                <p className="text-xs text-gray-500">/ {plan.protein_target_g}g</p>
-              </div>
-            </div>
-            {/* Water Ring */}
-            <div className="flex items-center gap-3">
-              <RingProgress value={0} max={plan.water_target_ml} size={72} color="#06b6d4">
-                <Droplets className="w-5 h-5 text-cyan-400" />
-              </RingProgress>
-              <div>
-                <p className="text-xs text-gray-400">Water</p>
-                <p className="font-bold text-white">0ml</p>
-                <p className="text-xs text-gray-500">/ {plan.water_target_ml}ml</p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Steps Logger */}
+      {/* Today's Workout */}
       <div className="card">
-        <p className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
-          <Footprints className="w-4 h-4 text-blue-400" /> Update Steps
-        </p>
-        <div className="flex gap-2">
-          <input
-            className="input flex-1"
-            type="number"
-            placeholder={`Current: ${steps.toLocaleString()}`}
-            value={stepsInput}
-            onChange={e => setStepsInput(e.target.value)}
-          />
-          <button onClick={handleStepUpdate} className="btn-primary px-4 py-2">
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Today's Workout Status */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-bold text-gray-200 flex items-center gap-2">
             <Dumbbell className="w-4 h-4 text-primary-400" /> Today's Workout
           </p>
-          <button onClick={() => onNavigate('workout')} className="text-xs text-primary-400 hover:text-primary-300">
-            {todayWorkout ? 'View' : 'Log →'}
+          <button onClick={() => onNavigate('training')} className="text-xs text-primary-400 hover:text-primary-300 font-semibold">
+            {todayWorkout ? 'View' : 'Go →'}
           </button>
         </div>
         {todayWorkout ? (
-          <div className="flex items-center gap-3 bg-green-500/10 rounded-xl p-3">
-            <CheckCircle2 className="w-5 h-5 text-green-400" />
+          <div className="flex items-center gap-3 bg-primary-500/10 border border-primary-500/20 rounded-xl p-3">
+            <CheckCircle2 className="w-5 h-5 text-primary-400 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-white">{todayWorkout.workout_type}</p>
-              <p className="text-xs text-gray-400">{todayWorkout.duration_minutes} min • {Math.round(todayWorkout.calories_burned)} cal</p>
+              <p className="text-xs text-gray-400">{todayWorkout.duration_minutes} min · {Math.round(todayWorkout.calories_burned)} cal</p>
             </div>
           </div>
         ) : plan?.workout ? (
-          <div
-            onClick={() => onNavigate('plan')}
-            className="flex items-center gap-3 bg-gray-800 rounded-xl p-3 cursor-pointer hover:bg-gray-700 transition-colors"
-          >
-            <Circle className="w-5 h-5 text-gray-500" />
+          <div onClick={() => onNavigate('training')}
+            className="flex items-center gap-3 bg-gray-800 rounded-xl p-3 cursor-pointer hover:bg-gray-750 transition-colors">
+            <Circle className="w-5 h-5 text-gray-500 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-gray-300">{plan.workout.type}</p>
               <p className="text-xs text-gray-500">{plan.workout.duration_minutes} min planned</p>
@@ -228,34 +179,31 @@ export default function Dashboard({ user, onNavigate }: Props) {
         )}
       </div>
 
-      {/* Quick Shortcuts */}
+      {/* Shortcut Grid */}
       <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => onNavigate('meals')} className="card-hover flex items-center gap-3 py-3">
-          <div className="w-9 h-9 bg-orange-500/20 rounded-xl flex items-center justify-center">
-            <Flame className="w-5 h-5 text-orange-400" />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-semibold text-white">Log Meal</p>
-            <p className="text-xs text-gray-400">{meals.length} logged today</p>
-          </div>
-        </button>
-        <button onClick={() => onNavigate('progress')} className="card-hover flex items-center gap-3 py-3">
-          <div className="w-9 h-9 bg-green-500/20 rounded-xl flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-green-400" />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-semibold text-white">Check Progress</p>
-            <p className="text-xs text-gray-400">AI analysis</p>
-          </div>
-        </button>
+        {SHORTCUTS.map(s => {
+          const Icon = s.icon;
+          return (
+            <button key={s.id} onClick={() => onNavigate(s.id)}
+              className="card hover:border-gray-700 active:scale-95 transition-all flex items-center gap-3 py-3.5">
+              <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center shrink-0`}>
+                <Icon className={`w-5 h-5 ${s.color}`} />
+              </div>
+              <div className="text-left min-w-0">
+                <p className="text-sm font-bold text-white">{s.label}</p>
+                <p className="text-xs text-gray-500 truncate">{s.sub}</p>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Coach Note */}
+      {/* AI Coach Note */}
       {plan?.ai_notes && (
-        <div className="card bg-primary-500/10 border-primary-500/30">
-          <div className="flex gap-2">
-            <Sparkles className="w-4 h-4 text-primary-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-primary-200">{plan.ai_notes}</p>
+        <div className="card bg-primary-500/8 border-primary-500/25">
+          <div className="flex gap-2.5">
+            <Sparkles className="w-4 h-4 text-primary-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-primary-200 leading-relaxed">{plan.ai_notes}</p>
           </div>
         </div>
       )}
