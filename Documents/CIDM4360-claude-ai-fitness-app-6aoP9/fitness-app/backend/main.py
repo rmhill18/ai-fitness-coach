@@ -1015,6 +1015,27 @@ async def budget_meal_plan(
     return ai_service.get_budget_meal_plan(user_dict, weekly_budget)
 
 
+@app.get("/api/meal-plan/{user_id}")
+async def weekly_meal_plan(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Calculate a sensible calorie target if one isn't stored
+    target = user.calorie_target or 2000
+    user_dict = {
+        "name": user.name,
+        "goal": user.goal,
+        "activity_level": user.activity_level,
+        "dietary_restrictions": user.dietary_restrictions,
+    }
+    return ai_service.generate_weekly_meal_plan(user_dict, target)
+
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "version": "2.0.0"}

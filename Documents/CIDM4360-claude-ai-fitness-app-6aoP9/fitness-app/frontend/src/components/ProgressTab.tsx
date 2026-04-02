@@ -24,9 +24,9 @@ interface DayData {
 
 const SUB_TABS = [
   { id: 'overview',  label: 'Overview',  icon: TrendingUp },
-  { id: 'calendar',  label: 'Calendar',  icon: Calendar   },
   { id: 'report',    label: 'Report',    icon: BarChart2  },
-  { id: 'body',      label: 'Body',      icon: Scan       },
+  { id: 'calendar',  label: 'Calendar',  icon: Calendar   },
+  { id: 'body',      label: 'Body Scan', icon: Scan       },
 ];
 
 // ── Calendar Component ────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ function ProgressCalendar({ user }: { user: UserProfile }) {
 
 // ── Main ProgressTab Component ────────────────────────────────────────────────
 export default function ProgressTab({ user }: Props) {
-  const [active, setActive] = useState<'overview' | 'calendar' | 'report' | 'body'>('overview');
+  const [active, setActive] = useState<'overview' | 'report' | 'calendar' | 'body'>('overview');
 
   return (
     <div className="flex flex-col h-full">

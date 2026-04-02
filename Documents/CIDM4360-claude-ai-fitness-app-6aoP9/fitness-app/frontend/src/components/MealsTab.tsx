@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { UtensilsCrossed, Zap } from 'lucide-react';
+import { UtensilsCrossed, CalendarDays, Zap } from 'lucide-react';
 import MealLogger from './MealLogger';
+import MealPlanTab from './MealPlanTab';
 import QuickFood from './QuickFood';
 import type { UserProfile } from '../types';
 
 interface Props { user: UserProfile; }
 
-const TABS = [
-  { id: 'log',   label: 'Log Meal',    icon: UtensilsCrossed, desc: 'Track what you eat today' },
-  { id: 'quick', label: 'Quick Food',  icon: Zap,             desc: 'What should I order right now?' },
+type TabId = 'log' | 'plan' | 'quick';
+
+const TABS: Array<{ id: TabId; label: string; icon: React.ElementType; desc: string }> = [
+  { id: 'log',   label: 'Log Meal',   icon: UtensilsCrossed, desc: 'Track what you eat today' },
+  { id: 'plan',  label: 'Meal Plan',  icon: CalendarDays,    desc: 'Your personalized 7-day plan' },
+  { id: 'quick', label: 'Quick Food', icon: Zap,             desc: 'What should I order right now?' },
 ];
 
 export default function MealsTab({ user }: Props) {
-  const [active, setActive] = useState<'log' | 'quick'>('log');
+  const [active, setActive] = useState<TabId>('log');
 
   return (
     <div className="flex flex-col h-full">
@@ -25,14 +29,14 @@ export default function MealsTab({ user }: Props) {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActive(tab.id as 'log' | 'quick')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                onClick={() => setActive(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                   isActive
                     ? 'bg-primary-500 text-white shadow-md shadow-primary-500/25'
                     : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-3.5 h-3.5" />
                 {tab.label}
               </button>
             );
@@ -46,6 +50,7 @@ export default function MealsTab({ user }: Props) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {active === 'log'   && <MealLogger user={user} />}
+        {active === 'plan'  && <MealPlanTab user={user} />}
         {active === 'quick' && <QuickFood user={user} />}
       </div>
     </div>

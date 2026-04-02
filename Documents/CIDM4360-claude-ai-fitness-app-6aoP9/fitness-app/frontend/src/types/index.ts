@@ -224,6 +224,34 @@ export interface RecompositionGuidance {
   progress_markers: string[];
 }
 
+export interface WeeklyMealPlanMeal {
+  name: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  prep_minutes: number;
+}
+
+export interface WeeklyMealPlanDay {
+  day: string;
+  meals: {
+    breakfast: WeeklyMealPlanMeal;
+    lunch: WeeklyMealPlanMeal;
+    dinner: WeeklyMealPlanMeal;
+    snack: WeeklyMealPlanMeal;
+  };
+  day_totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+}
+
+export interface WeeklyMealPlan {
+  summary: string;
+  daily_targets: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+  days: WeeklyMealPlanDay[];
+  hydration_tip: string;
+  key_tips: string[];
+}
+
 export interface BudgetMealPlan {
   weekly_cost_estimate: number;
   cost_per_day: number;

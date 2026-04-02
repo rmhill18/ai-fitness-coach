@@ -196,6 +196,10 @@ export const generateTimedWorkout = (data: {
 export const getRecompositionGuidance = (userId: number) =>
   api.get<RecompositionGuidance>(`/recomposition/${userId}`).then(r => r.data);
 
+// ── Weekly Meal Plan ──────────────────────────────────────────────────────────
+export const getWeeklyMealPlan = (userId: number) =>
+  api.get<import('../types').WeeklyMealPlan>(`/meal-plan/${userId}`).then(r => r.data);
+
 // ── Budget Meal Plan ──────────────────────────────────────────────────────────
 export const getBudgetMealPlan = (userId: number, weeklyBudget?: number) =>
   api

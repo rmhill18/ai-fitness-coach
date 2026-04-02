@@ -632,3 +632,52 @@ Return ONLY valid JSON:
 
     text = next(b.text for b in response.content if b.type == "text")
     return _parse_json_response(text)
+
+
+def generate_weekly_meal_plan(user: dict, target_calories: int) -> dict:
+    """Generate a personalized 7-day meal plan based on user goals and calorie target."""
+    prompt = f"""You are a registered dietitian creating a personalized weekly meal plan.
+
+USER PROFILE:
+- Name: {user.get('name', 'User')}
+- Goal: {user.get('goal')}
+- Activity Level: {user.get('activity_level')}
+- Dietary Restrictions: {user.get('dietary_restrictions', 'none')}
+- Daily Calorie Target: {target_calories} kcal
+
+Create a practical, enjoyable 7-day meal plan that supports their specific fitness goal.
+Each day should have breakfast, lunch, dinner, and a snack. Vary meals across the week.
+
+Return ONLY valid JSON in this exact structure:
+{{
+  "summary": "<1-2 sentence overview of this plan and why it fits their goal>",
+  "daily_targets": {{
+    "calories": {target_calories},
+    "protein_g": <int>,
+    "carbs_g": <int>,
+    "fat_g": <int>
+  }},
+  "days": [
+    {{
+      "day": "Monday",
+      "meals": {{
+        "breakfast": {{"name": "<meal name>", "calories": <int>, "protein_g": <int>, "carbs_g": <int>, "fat_g": <int>, "prep_minutes": <int>}},
+        "lunch":     {{"name": "<meal name>", "calories": <int>, "protein_g": <int>, "carbs_g": <int>, "fat_g": <int>, "prep_minutes": <int>}},
+        "dinner":    {{"name": "<meal name>", "calories": <int>, "protein_g": <int>, "carbs_g": <int>, "fat_g": <int>, "prep_minutes": <int>}},
+        "snack":     {{"name": "<meal name>", "calories": <int>, "protein_g": <int>, "carbs_g": <int>, "fat_g": <int>, "prep_minutes": <int>}}
+      }},
+      "day_totals": {{"calories": <int>, "protein_g": <int>, "carbs_g": <int>, "fat_g": <int>}}
+    }}
+  ],
+  "hydration_tip": "<daily water intake recommendation>",
+  "key_tips": ["<actionable nutrition tip>", "<tip>", "<tip>"]
+}}
+Include all 7 days: Monday through Sunday."""
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = next(b.text for b in response.content if b.type == "text")
+    return _parse_json_response(text)
