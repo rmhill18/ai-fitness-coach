@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import os
 from datetime import date, datetime, timedelta
@@ -38,16 +39,22 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-to-a-long-random-secret-in-
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=False)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def _prepare_password(password: str) -> str:
+    """Pre-hash with SHA-256 so the value passed to bcrypt is always
+    exactly 64 bytes — safely under bcrypt's hard 72-byte limit."""
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
 def _hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(_prepare_password(password))
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(_prepare_password(plain), hashed)
 
 
 def _create_token(user_auth_id: int, email: str, user_profile_id: Optional[int]) -> str:
