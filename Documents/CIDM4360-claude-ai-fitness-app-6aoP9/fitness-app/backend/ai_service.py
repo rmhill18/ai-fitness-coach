@@ -96,7 +96,6 @@ If they missed workouts, increase accessibility/reduce intensity slightly to reb
     response = client.messages.create(
         model=MODEL,
         max_tokens=4096,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -225,7 +224,6 @@ Return ONLY valid JSON:
     response = client.messages.create(
         model=MODEL,
         max_tokens=3000,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -302,7 +300,6 @@ Return ONLY valid JSON:
     response = client.messages.create(
         model=MODEL,
         max_tokens=4096,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -531,7 +528,6 @@ Return ONLY valid JSON:
     response = client.messages.create(
         model=MODEL,
         max_tokens=3000,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
     )
     text = next(b.text for b in response.content if b.type == "text")
@@ -626,7 +622,6 @@ Return ONLY valid JSON:
     response = client.messages.create(
         model=MODEL,
         max_tokens=2048,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
     )
 
