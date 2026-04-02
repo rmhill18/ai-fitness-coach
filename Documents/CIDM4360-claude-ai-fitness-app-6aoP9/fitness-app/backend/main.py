@@ -38,7 +38,7 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-to-a-long-random-secret-in-
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=False)
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
