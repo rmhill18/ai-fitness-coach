@@ -1,101 +1,91 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, Sparkles, Utensils, Dumbbell,
-  TrendingUp, BarChart2, Scan, User
+  LayoutDashboard, Utensils, Dumbbell,
+  TrendingUp, Watch, User, Bell, Zap, LogOut, Shield,
 } from 'lucide-react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
-import DailyPlan from './components/DailyPlan';
-import MealLogger from './components/MealLogger';
-import WorkoutTracker from './components/WorkoutTracker';
-import ProgressAnalysis from './components/ProgressAnalysis';
-import WeeklyReport from './components/WeeklyReport';
-import BodyAnalysis from './components/BodyAnalysis';
+import MealsTab from './components/MealsTab';
+import TrainingTab from './components/TrainingTab';
+import ProgressTab from './components/ProgressTab';
+import WearableDashboard from './components/WearableDashboard';
 import UserProfilePage from './components/UserProfile';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import { getUser } from './api/client';
 import type { UserProfile } from './types';
 
-const STORAGE_KEY = 'fitness_user_id';
-
 const NAV_TABS = [
-  { id: 'home', label: 'Home', icon: LayoutDashboard },
-  { id: 'plan', label: 'Plan', icon: Sparkles },
-  { id: 'meals', label: 'Meals', icon: Utensils },
-  { id: 'workout', label: 'Train', icon: Dumbbell },
+  { id: 'home',     label: 'Home',     icon: LayoutDashboard },
+  { id: 'meals',    label: 'Meals',    icon: Utensils },
+  { id: 'training', label: 'Training', icon: Dumbbell },
   { id: 'progress', label: 'Progress', icon: TrendingUp },
-  { id: 'report', label: 'Report', icon: BarChart2 },
-  { id: 'body', label: 'Body', icon: Scan },
-  { id: 'profile', label: 'Profile', icon: User },
+  { id: 'health',   label: 'Health',   icon: Watch },
+  { id: 'profile',  label: 'Profile',  icon: User },
 ];
 
-export default function App() {
-  const [user, setUser] = useState<UserProfile | null>(null);
+function AuthenticatedApp() {
+  const { userId, hasProfile, setHasProfile, logout, email } = useAuth();
+  const [user, setUser]         = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState('home');
+  const [loading, setLoading]   = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedId = localStorage.getItem(STORAGE_KEY);
-    if (storedId) {
-      fetch(`/api/users/${storedId}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(u => {
-          if (u) setUser(u);
-          else setShowOnboarding(true);
-        })
-        .catch(() => setShowOnboarding(true))
-        .finally(() => setLoading(false));
-    } else {
-      setShowOnboarding(true);
-      setLoading(false);
-    }
-  }, []);
+    if (!hasProfile || !userId) { setShowOnboarding(true); setLoading(false); return; }
+    getUser(userId)
+      .then(u => { setUser(u); setShowOnboarding(false); })
+      .catch(() => setShowOnboarding(true))
+      .finally(() => setLoading(false));
+  }, [userId, hasProfile]);
 
   const handleUserSaved = (u: UserProfile) => {
-    localStorage.setItem(STORAGE_KEY, String(u.id));
-    setUser(u);
-    setShowOnboarding(false);
-    setActiveTab('home');
+    setUser(u); setHasProfile(u.id); setShowOnboarding(false); setActiveTab('home');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-3 border-primary-500/30 border-t-primary-500 rounded-full spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading AI Fitness Coach…</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-950">
+      <div className="w-10 h-10 border-2 border-primary-500/30 border-t-primary-500 rounded-full spin" />
+    </div>
+  );
 
-  if (showOnboarding || !user) {
-    return (
-      <div className="min-h-screen bg-gray-950">
-        {/* App Header */}
-        <div className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800 px-4 py-3 flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary-500 rounded-xl flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-black text-white text-lg">AI Fitness Coach</span>
+  if (showOnboarding || !user) return (
+    <div className="min-h-screen bg-gray-950">
+      <div className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+        <div className="w-10 h-10 bg-primary-500 rounded-2xl flex items-center justify-center shadow-lg shadow-primary-500/25">
+          <Zap className="w-6 h-6 text-white" />
         </div>
-        <UserProfilePage onSave={handleUserSaved} />
+        <button onClick={logout} className="text-gray-500 hover:text-gray-300 text-xs flex items-center gap-1">
+          <LogOut className="w-3.5 h-3.5" /> Sign out
+        </button>
       </div>
-    );
-  }
+      <UserProfilePage onSave={handleUserSaved} />
+    </div>
+  );
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'home': return <Dashboard user={user} onNavigate={setActiveTab} />;
-      case 'plan': return <DailyPlan user={user} />;
-      case 'meals': return <MealLogger user={user} />;
-      case 'workout': return <WorkoutTracker user={user} />;
-      case 'progress': return <ProgressAnalysis user={user} />;
-      case 'report': return <WeeklyReport user={user} />;
-      case 'body': return <BodyAnalysis user={user} />;
-      case 'profile': return (
-        <UserProfilePage
-          existing={user}
-          onSave={handleUserSaved}
-        />
+      case 'home':     return <Dashboard user={user} onNavigate={setActiveTab} />;
+      case 'meals':    return <MealsTab user={user} />;
+      case 'training': return <TrainingTab user={user} />;
+      case 'progress': return <ProgressTab user={user} />;
+      case 'health':   return <WearableDashboard user={user} />;
+      case 'privacy':  return <PrivacyPolicy />;
+      case 'profile':  return (
+        <div>
+          <UserProfilePage existing={user} onSave={handleUserSaved} />
+          <div className="px-4 pb-10 space-y-3 max-w-2xl mx-auto">
+            <button onClick={() => setActiveTab('privacy')}
+              className="w-full py-3 bg-gray-900 rounded-2xl text-gray-400 text-sm flex items-center justify-center gap-2 hover:text-white transition-colors">
+              <Shield className="w-4 h-4" /> Privacy Policy
+            </button>
+            <button onClick={logout}
+              className="w-full py-3 bg-gray-900 rounded-2xl text-red-400 text-sm flex items-center justify-center gap-2 hover:bg-red-500/10 transition-colors">
+              <LogOut className="w-4 h-4" /> Sign Out
+            </button>
+            {email && <p className="text-center text-xs text-gray-600">{email}</p>}
+          </div>
+        </div>
       );
       default: return <Dashboard user={user} onNavigate={setActiveTab} />;
     }
@@ -103,36 +93,43 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
-      {/* Top Header */}
-      <div className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary-500 rounded-xl flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
+
+      {/* ── Top Header ── */}
+      <header className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur-sm border-b border-gray-800/60">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+
+          {/* Left: Notifications */}
+          <button className="relative w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white transition-colors rounded-xl hover:bg-gray-800">
+            <Bell className="w-5 h-5" />
+            {/* Unread dot */}
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary-500 rounded-full ring-2 ring-gray-950" />
+          </button>
+
+          {/* Center: Logo */}
+          <div className="w-11 h-11 bg-primary-500 rounded-2xl flex items-center justify-center shadow-lg shadow-primary-500/30">
+            <Zap className="w-6 h-6 text-white" />
           </div>
-          <div>
-            <span className="font-black text-white text-base">AI Fitness Coach</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 capitalize hidden sm:block">
-            Goal: {user.goal.replace('_', ' ')}
-          </span>
-          <div className="w-8 h-8 bg-primary-500/20 rounded-full flex items-center justify-center">
-            <span className="text-primary-400 text-xs font-bold">
+
+          {/* Right: Avatar */}
+          <button
+            onClick={() => setActiveTab('profile')}
+            className="w-9 h-9 bg-primary-500/15 rounded-full flex items-center justify-center hover:bg-primary-500/25 transition-colors ring-2 ring-primary-500/30"
+          >
+            <span className="text-primary-400 text-sm font-bold">
               {user.name.charAt(0).toUpperCase()}
             </span>
-          </div>
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* Page Content */}
+      {/* ── Page Content ── */}
       <main className="flex-1 overflow-y-auto pb-24">
         {renderContent()}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-gray-950/95 backdrop-blur-sm border-t border-gray-800 z-10">
-        <div className="max-w-2xl mx-auto grid grid-cols-8">
+      {/* ── Bottom Navigation ── */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-gray-950/95 backdrop-blur-sm border-t border-gray-800/60 z-10">
+        <div className="max-w-2xl mx-auto grid grid-cols-6 safe-area-pb">
           {NAV_TABS.map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -140,13 +137,18 @@ export default function App() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center py-2.5 gap-0.5 transition-colors ${
+                className={`flex flex-col items-center py-3 gap-1 transition-all ${
                   active ? 'text-primary-400' : 'text-gray-500 hover:text-gray-400'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${active ? 'drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]' : ''}`} />
-                <span className="text-[10px] font-medium">{tab.label}</span>
-                {active && <div className="w-1 h-1 bg-primary-400 rounded-full" />}
+                <div className={`relative flex items-center justify-center w-8 h-8 rounded-xl transition-all ${
+                  active ? 'bg-primary-500/15' : ''
+                }`}>
+                  <Icon className={`w-[18px] h-[18px] transition-all ${
+                    active ? 'drop-shadow-[0_0_8px_rgba(59,130,246,0.7)]' : ''
+                  }`} />
+                </div>
+                <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
               </button>
             );
           })}
@@ -154,4 +156,14 @@ export default function App() {
       </nav>
     </div>
   );
+}
+
+function AppInner() {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <AuthScreen onAuthenticated={() => {}} />;
+  return <AuthenticatedApp />;
+}
+
+export default function App() {
+  return <AuthProvider><AppInner /></AuthProvider>;
 }

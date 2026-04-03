@@ -1,12 +1,18 @@
 import base64
+import hashlib
 import json
 import os
 from datetime import date, datetime, timedelta
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+load_dotenv()  # Must run before any module that reads env vars (e.g. ai_service)
+
+from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+import bcrypt as _bcrypt_lib
 from pydantic import BaseModel
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,21 +21,80 @@ import ai_service
 from database import get_db, init_db
 from models import (
     BodyAnalysis,
+    DailyCheckin,
     DailyPlan,
+    DevicePushToken,
     MealLog,
     StepLog,
+    UserAuth,
     UserProfile,
+    WearableData,
     WeeklyReport,
     WorkoutLog,
 )
 
-load_dotenv()
+# ─── Security / JWT ───────────────────────────────────────────────────────────
 
-app = FastAPI(title="AI Fitness Coach API", version="1.0.0")
+JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-to-a-long-random-secret-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_DAYS = 30
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _prepare_password(password: str) -> bytes:
+    """SHA-256 hash the password first so it is always exactly 32 bytes —
+    well under bcrypt's 72-byte hard limit regardless of input length."""
+    return hashlib.sha256(password.encode("utf-8")).digest()
+
+
+def _hash_password(password: str) -> str:
+    return _bcrypt_lib.hashpw(_prepare_password(password), _bcrypt_lib.gensalt()).decode("utf-8")
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    return _bcrypt_lib.checkpw(_prepare_password(plain), hashed.encode("utf-8"))
+
+
+def _create_token(user_auth_id: int, email: str, user_profile_id: Optional[int]) -> str:
+    expire = datetime.utcnow() + timedelta(days=JWT_EXPIRE_DAYS)
+    return jwt.encode(
+        {"sub": str(user_auth_id), "email": email, "user_id": user_profile_id, "exp": expire},
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM,
+    )
+
+
+async def get_current_auth(
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> UserAuth:
+    """Dependency that validates JWT and returns the UserAuth record."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        auth_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    result = await db.execute(select(UserAuth).where(UserAuth.id == auth_id))
+    auth = result.scalar_one_or_none()
+    if not auth:
+        raise HTTPException(status_code=401, detail="User not found")
+    return auth
+
+
+app = FastAPI(title="AI Fitness Coach API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost",          # Capacitor Android
+        "capacitor://localhost",     # Capacitor iOS
+        "ionic://localhost",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,14 +154,103 @@ class StepLogCreate(BaseModel):
     steps: int
 
 
+# ─── Auth Routes ──────────────────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/register")
+async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    # Check duplicate email
+    existing = await db.execute(select(UserAuth).where(UserAuth.email == data.email.lower()))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    auth = UserAuth(email=data.email.lower(), hashed_password=_hash_password(data.password))
+    db.add(auth)
+    await db.commit()
+    await db.refresh(auth)
+    token = _create_token(auth.id, auth.email, None)
+    return {"access_token": token, "token_type": "bearer", "user_id": None, "has_profile": False}
+
+
+@app.post("/api/auth/login")
+async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserAuth).where(UserAuth.email == data.email.lower()))
+    auth = result.scalar_one_or_none()
+    if not auth or not _verify_password(data.password, auth.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = _create_token(auth.id, auth.email, auth.user_profile_id)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user_id": auth.user_profile_id,
+        "has_profile": auth.user_profile_id is not None,
+    }
+
+
+@app.get("/api/auth/me")
+async def auth_me(auth: UserAuth = Depends(get_current_auth)):
+    return {"email": auth.email, "user_id": auth.user_profile_id, "has_profile": auth.user_profile_id is not None}
+
+
+# ─── Push Token ───────────────────────────────────────────────────────────────
+
+class PushTokenRequest(BaseModel):
+    user_id: int
+    token: str
+    platform: str  # ios, android, web
+
+
+@app.post("/api/push-token")
+async def save_push_token(data: PushTokenRequest, db: AsyncSession = Depends(get_db)):
+    # Upsert: one token per user per platform
+    result = await db.execute(
+        select(DevicePushToken).where(
+            and_(DevicePushToken.user_id == data.user_id, DevicePushToken.platform == data.platform)
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        existing.token = data.token
+    else:
+        db.add(DevicePushToken(user_id=data.user_id, token=data.token, platform=data.platform))
+    await db.commit()
+    return {"message": "Push token saved"}
+
+
 # ─── User Routes ──────────────────────────────────────────────────────────────
 
 @app.post("/api/users")
-async def create_user(data: UserProfileCreate, db: AsyncSession = Depends(get_db)):
+async def create_user(
+    data: UserProfileCreate,
+    db: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+):
     user = UserProfile(**data.model_dump())
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    # Link profile to auth account if JWT provided
+    if credentials:
+        try:
+            payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            auth_id = int(payload["sub"])
+            auth_result = await db.execute(select(UserAuth).where(UserAuth.id == auth_id))
+            auth = auth_result.scalar_one_or_none()
+            if auth:
+                auth.user_profile_id = user.id
+                await db.commit()
+        except (JWTError, KeyError, ValueError):
+            pass
     return {"id": user.id, "name": user.name, "message": "Profile created!"}
 
 
@@ -609,6 +763,279 @@ async def get_body_history(user_id: int, db: AsyncSession = Depends(get_db)):
     ]
 
 
+# ─── Wearable / Health Data ───────────────────────────────────────────────────
+
+class WearableDataCreate(BaseModel):
+    user_id: int
+    log_date: str
+    sleep_score: Optional[int] = None
+    sleep_hours: Optional[float] = None
+    hrv_ms: Optional[float] = None
+    resting_heart_rate: Optional[int] = None
+    recovery_score: Optional[int] = None
+    spo2_pct: Optional[float] = None
+    steps: Optional[int] = None
+    active_calories: Optional[int] = None
+    device_type: str = "manual"
+
+
+@app.post("/api/wearable")
+async def log_wearable(data: WearableDataCreate, db: AsyncSession = Depends(get_db)):
+    # Upsert by user + date
+    result = await db.execute(
+        select(WearableData).where(
+            and_(
+                WearableData.user_id == data.user_id,
+                WearableData.log_date == date.fromisoformat(data.log_date),
+            )
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        for k, v in data.model_dump(exclude={"user_id", "log_date"}).items():
+            if v is not None:
+                setattr(existing, k, v)
+    else:
+        db.add(WearableData(
+            user_id=data.user_id,
+            log_date=date.fromisoformat(data.log_date),
+            **{k: v for k, v in data.model_dump(exclude={"user_id", "log_date"}).items() if v is not None},
+        ))
+    await db.commit()
+    return {"message": "Wearable data saved"}
+
+
+@app.get("/api/wearable/{user_id}")
+async def get_wearable(user_id: int, days: int = 7, db: AsyncSession = Depends(get_db)):
+    since = date.today() - timedelta(days=days)
+    result = await db.execute(
+        select(WearableData).where(
+            and_(WearableData.user_id == user_id, WearableData.log_date >= since)
+        ).order_by(WearableData.log_date.desc())
+    )
+    records = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "log_date": str(r.log_date),
+            "sleep_score": r.sleep_score,
+            "sleep_hours": r.sleep_hours,
+            "hrv_ms": r.hrv_ms,
+            "resting_heart_rate": r.resting_heart_rate,
+            "recovery_score": r.recovery_score,
+            "spo2_pct": r.spo2_pct,
+            "steps": r.steps,
+            "active_calories": r.active_calories,
+            "device_type": r.device_type,
+        }
+        for r in records
+    ]
+
+
+# ─── Daily Check-in ───────────────────────────────────────────────────────────
+
+class DailyCheckinCreate(BaseModel):
+    user_id: int
+    checkin_date: str
+    mood: int           # 1-5
+    energy_level: int   # 1-5
+    sleep_quality: int  # 1-5
+    stress_level: int   # 1-5
+    muscle_soreness: int  # 1-5
+    notes: str = ""
+
+
+@app.post("/api/checkin")
+async def daily_checkin(data: DailyCheckinCreate, db: AsyncSession = Depends(get_db)):
+    checkin_date = date.fromisoformat(data.checkin_date)
+
+    # Check if already checked in today
+    result = await db.execute(
+        select(DailyCheckin).where(
+            and_(
+                DailyCheckin.user_id == data.user_id,
+                DailyCheckin.checkin_date == checkin_date,
+            )
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    # Calculate streak
+    yesterday = checkin_date - timedelta(days=1)
+    streak_result = await db.execute(
+        select(DailyCheckin).where(
+            and_(
+                DailyCheckin.user_id == data.user_id,
+                DailyCheckin.checkin_date == yesterday,
+            )
+        )
+    )
+    yesterday_checkin = streak_result.scalar_one_or_none()
+    streak = (yesterday_checkin.streak_days + 1) if yesterday_checkin else 1
+
+    if existing:
+        existing.mood = data.mood
+        existing.energy_level = data.energy_level
+        existing.sleep_quality = data.sleep_quality
+        existing.stress_level = data.stress_level
+        existing.muscle_soreness = data.muscle_soreness
+        existing.notes = data.notes
+        existing.streak_days = streak
+        await db.commit()
+        return {"message": "Check-in updated", "streak_days": streak}
+    else:
+        checkin = DailyCheckin(
+            user_id=data.user_id,
+            checkin_date=checkin_date,
+            mood=data.mood,
+            energy_level=data.energy_level,
+            sleep_quality=data.sleep_quality,
+            stress_level=data.stress_level,
+            muscle_soreness=data.muscle_soreness,
+            notes=data.notes,
+            streak_days=streak,
+        )
+        db.add(checkin)
+        await db.commit()
+        await db.refresh(checkin)
+        return {"message": "Check-in saved", "streak_days": streak}
+
+
+@app.get("/api/checkin/{user_id}")
+async def get_checkins(user_id: int, days: int = 30, db: AsyncSession = Depends(get_db)):
+    since = date.today() - timedelta(days=days)
+    result = await db.execute(
+        select(DailyCheckin).where(
+            and_(DailyCheckin.user_id == user_id, DailyCheckin.checkin_date >= since)
+        ).order_by(DailyCheckin.checkin_date.desc())
+    )
+    checkins = result.scalars().all()
+    return [
+        {
+            "id": c.id,
+            "checkin_date": str(c.checkin_date),
+            "mood": c.mood,
+            "energy_level": c.energy_level,
+            "sleep_quality": c.sleep_quality,
+            "stress_level": c.stress_level,
+            "muscle_soreness": c.muscle_soreness,
+            "notes": c.notes,
+            "streak_days": c.streak_days,
+        }
+        for c in checkins
+    ]
+
+
+# ─── Quick Food Decision ──────────────────────────────────────────────────────
+
+class QuickFoodRequest(BaseModel):
+    user_id: int
+    restaurant: str
+    meal_context: str = "general meal"
+    calories_remaining: int = 600
+
+
+@app.post("/api/food/quick-decision")
+async def quick_food_decision(data: QuickFoodRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == data.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_dict = {
+        "goal": user.goal,
+        "dietary_restrictions": user.dietary_restrictions,
+    }
+    return ai_service.get_quick_food_decision(
+        user_dict, data.restaurant, data.meal_context, data.calories_remaining
+    )
+
+
+# ─── Timed Workout Generator ──────────────────────────────────────────────────
+
+class TimedWorkoutRequest(BaseModel):
+    user_id: int
+    available_minutes: int
+    equipment: str = "no equipment"
+    focus_area: Optional[str] = None
+
+
+@app.post("/api/workouts/timed")
+async def generate_timed_workout(data: TimedWorkoutRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == data.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_dict = {
+        "name": user.name,
+        "goal": user.goal,
+        "fitness_level": user.fitness_level,
+    }
+    return ai_service.generate_timed_workout(
+        user_dict, data.available_minutes, data.equipment, data.focus_area
+    )
+
+
+# ─── Body Recomposition Guidance ─────────────────────────────────────────────
+
+@app.get("/api/recomposition/{user_id}")
+async def recomposition_guidance(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_dict = {
+        "age": user.age,
+        "height_cm": user.height_cm,
+        "weight_kg": user.weight_kg,
+        "activity_level": user.activity_level,
+        "fitness_level": user.fitness_level,
+        "dietary_restrictions": user.dietary_restrictions,
+        "goal": user.goal,
+    }
+    return ai_service.get_recomposition_guidance(user_dict)
+
+
+# ─── Budget Meal Plan ─────────────────────────────────────────────────────────
+
+@app.get("/api/budget-plan/{user_id}")
+async def budget_meal_plan(
+    user_id: int,
+    weekly_budget: float = 50.0,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_dict = {
+        "goal": user.goal,
+        "activity_level": user.activity_level,
+        "dietary_restrictions": user.dietary_restrictions,
+    }
+    return ai_service.get_budget_meal_plan(user_dict, weekly_budget)
+
+
+@app.get("/api/meal-plan/{user_id}")
+async def weekly_meal_plan(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Calculate a sensible calorie target if one isn't stored
+    target = user.calorie_target or 2000
+    user_dict = {
+        "name": user.name,
+        "goal": user.goal,
+        "activity_level": user.activity_level,
+        "dietary_restrictions": user.dietary_restrictions,
+    }
+    return ai_service.generate_weekly_meal_plan(user_dict, target)
+
+
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "2.0.0"}

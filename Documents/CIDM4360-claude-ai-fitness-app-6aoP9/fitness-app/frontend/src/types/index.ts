@@ -144,6 +144,131 @@ export interface WeeklyReport {
   week_end: string;
 }
 
+export interface WearableData {
+  id?: number;
+  log_date: string;
+  sleep_score?: number;
+  sleep_hours?: number;
+  hrv_ms?: number;
+  resting_heart_rate?: number;
+  recovery_score?: number;
+  spo2_pct?: number;
+  steps?: number;
+  active_calories?: number;
+  device_type?: string;
+}
+
+export interface DailyCheckin {
+  id?: number;
+  checkin_date: string;
+  mood: number;
+  energy_level: number;
+  sleep_quality: number;
+  stress_level: number;
+  muscle_soreness: number;
+  notes?: string;
+  streak_days?: number;
+}
+
+export interface QuickFoodResult {
+  recommendation: string;
+  why: string;
+  estimated_calories: number;
+  estimated_protein_g: number;
+  smart_swaps: string[];
+  avoid: string[];
+  backup_option: string;
+  quick_tip: string;
+}
+
+export interface TimedWorkoutResult {
+  workout_name: string;
+  total_minutes: number;
+  format: string;
+  calories_estimate: number;
+  difficulty: string;
+  warmup: { duration_minutes: number; exercises: string[] };
+  main_workout: {
+    duration_minutes: number;
+    structure: string;
+    exercises: Array<{
+      name: string;
+      duration_or_reps: string;
+      rest: string;
+      modification: string;
+    }>;
+  };
+  cooldown: { duration_minutes: number; exercises: string[] };
+  pro_tip: string;
+  motivation: string;
+}
+
+export interface RecompositionGuidance {
+  overview: string;
+  calorie_strategy: { daily_calories: number; rationale: string; cycling: string };
+  macro_split: { protein_g: number; carbs_g: number; fat_g: number; protein_priority_reason: string };
+  training_approach: {
+    weekly_sessions: number;
+    strength_days: number;
+    cardio_days: number;
+    style: string;
+    key_principles: string[];
+  };
+  timeline: {
+    monthly_fat_loss_kg: number;
+    monthly_muscle_gain_kg: number;
+    milestones: string[];
+  };
+  top_tips: string[];
+  common_mistakes: string[];
+  progress_markers: string[];
+}
+
+export interface WeeklyMealPlanMeal {
+  name: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  prep_minutes: number;
+}
+
+export interface WeeklyMealPlanDay {
+  day: string;
+  meals: {
+    breakfast: WeeklyMealPlanMeal;
+    lunch: WeeklyMealPlanMeal;
+    dinner: WeeklyMealPlanMeal;
+    snack: WeeklyMealPlanMeal;
+  };
+  day_totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+}
+
+export interface WeeklyMealPlan {
+  summary: string;
+  daily_targets: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+  days: WeeklyMealPlanDay[];
+  hydration_tip: string;
+  key_tips: string[];
+}
+
+export interface BudgetMealPlan {
+  weekly_cost_estimate: number;
+  cost_per_day: number;
+  overview: string;
+  staple_foods: Array<{ food: string; weekly_cost_usd: number; uses: string[] }>;
+  daily_template: {
+    breakfast: { meal: string; cost_usd: number; calories: number; protein_g: number; prep_minutes: number };
+    lunch: { meal: string; cost_usd: number; calories: number; protein_g: number; prep_minutes: number };
+    dinner: { meal: string; cost_usd: number; calories: number; protein_g: number; prep_minutes: number };
+    snack: { meal: string; cost_usd: number; calories: number; protein_g: number; prep_minutes: number };
+  };
+  shopping_list: Array<{ item: string; quantity: string; estimated_cost_usd: number }>;
+  meal_prep_tips: string[];
+  budget_protein_sources: string[];
+  total_daily_nutrition: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+}
+
 export interface BodyAnalysisResult {
   bmi: number;
   bmi_category: string;

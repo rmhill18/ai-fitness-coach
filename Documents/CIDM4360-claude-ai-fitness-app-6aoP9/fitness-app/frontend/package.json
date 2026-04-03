@@ -1,12 +1,19 @@
 {
   "name": "ai-fitness-coach",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build:mobile": "tsc && vite build && npx cap sync",
+    "preview": "vite preview",
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android",
+    "cap:run:ios": "npx cap run ios",
+    "cap:run:android": "npx cap run android",
+    "generate:icons": "npx @capacitor/assets generate --iconBackgroundColor '#030712' --splashBackgroundColor '#030712'"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -15,7 +22,13 @@
     "react-router-dom": "^7.1.1",
     "recharts": "^2.14.1",
     "lucide-react": "^0.469.0",
-    "clsx": "^2.1.1"
+    "clsx": "^2.1.1",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/haptics": "^6.0.0",
+    "@capacitor/push-notifications": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",
@@ -25,6 +38,10 @@
     "vite": "^6.0.5",
     "tailwindcss": "^3.4.17",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.5.1"
+    "postcss": "^8.5.1",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/assets": "^3.0.0"
   }
 }

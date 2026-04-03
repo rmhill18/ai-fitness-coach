@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="0" fill="#030712"/>
+  <!-- Outer glow circle -->
+  <circle cx="512" cy="512" r="420" fill="#0a1a0a"/>
+  <!-- Green ring -->
+  <circle cx="512" cy="512" r="420" fill="none" stroke="#3b82f6" stroke-width="12" opacity="0.3"/>
+  <!-- Lightning bolt -->
+  <path d="M580 160 L340 540 L480 540 L420 860 L700 460 L560 460 Z"
+        fill="#3b82f6"
+        opacity="0.95"/>
+  <!-- Inner highlight on bolt -->
+  <path d="M580 160 L500 320 L560 320 L560 460 L700 460 L560 460 L620 320 L520 320 Z"
+        fill="#93c5fd"
+        opacity="0.4"/>
+</svg>

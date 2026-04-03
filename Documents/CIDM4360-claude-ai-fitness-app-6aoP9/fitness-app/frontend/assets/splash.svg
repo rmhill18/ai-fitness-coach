@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">
+  <!-- Dark background matching app theme -->
+  <rect width="2732" height="2732" fill="#030712"/>
+  <!-- Center lightning bolt scaled up -->
+  <g transform="translate(1366,1366)">
+    <path d="M280 -560 L-200 200 L80 200 L-40 560 L340 -40 L60 -40 Z"
+          fill="#22c55e"
+          opacity="0.95"/>
+    <path d="M280 -560 L140 -200 L200 -200 L200 -40 L340 -40 L200 -40 L260 -200 L120 -200 Z"
+          fill="#4ade80"
+          opacity="0.4"/>
+  </g>
+  <!-- App name below icon -->
+  <text x="1366" y="1780" text-anchor="middle"
+        font-family="system-ui, -apple-system, sans-serif"
+        font-size="96" font-weight="900" fill="#ffffff" opacity="0.9">
+    AI Fitness Coach
+  </text>
+</svg>

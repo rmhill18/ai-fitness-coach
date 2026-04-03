@@ -57,6 +57,16 @@
     @apply h-full bg-primary-500 rounded-full transition-all duration-500;
   }
 
+  /* Glassmorphism card variant */
+  .card-glass {
+    @apply bg-gray-900/80 backdrop-blur-sm rounded-2xl border border-gray-800/60 p-4;
+  }
+
+  /* Accent pill */
+  .pill {
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
   .tab-active {
     @apply text-primary-400 border-b-2 border-primary-400;
   }
